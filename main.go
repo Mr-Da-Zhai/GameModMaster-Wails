@@ -11,11 +11,13 @@ import (
 var assets embed.FS
 
 func main() {
+	appService := NewAppService()
+
 	app := application.New(application.Options{
 		Name:        "GameModMaster",
 		Description: "游戏修改器大师",
 		Services: []application.Service{
-			application.NewService(&AppService{}),
+			application.NewService(appService),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
@@ -26,9 +28,11 @@ func main() {
 	})
 
 	app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title:  "GameModMaster",
+		Title:  "GameModMaster - 游戏修改器大师",
 		Width:  1200,
 		Height: 800,
+		MinWidth: 900,
+		MinHeight: 600,
 		Mac: application.MacWindow{
 			InvisibleTitleBarHeight: 50,
 			Backdrop:                application.MacBackdropTranslucent,

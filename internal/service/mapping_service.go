@@ -88,3 +88,13 @@ func (s *MappingService) Lookup(query string) (string, bool) {
 	}
 	return "", false
 }
+
+// GetMapping returns the internal nameToZH map (en->zh).
+func (s *MappingService) GetMapping() map[string]string {
+	return s.nameToZH
+}
+
+// GetAliases returns the internal aliasToZH map (alias->zh).
+func (s *MappingService) GetAliases() map[string]string {
+	return s.aliasToZH
+}
