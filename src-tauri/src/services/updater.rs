@@ -56,7 +56,7 @@ pub async fn check_update(current_version: String) -> AppResult<UpdateInfo> {
         .header("User-Agent", "GameModMaster")
         .send()
         .await
-        .map_err(|e| AppError::RequestError(e))?;
+        .map_err(|e| AppError::RequestError(e.to_string()))?;
 
     if !response.status().is_success() {
         return Err(AppError::DownloadError(format!(
@@ -69,7 +69,7 @@ pub async fn check_update(current_version: String) -> AppResult<UpdateInfo> {
     let release: serde_json::Value = response
         .json()
         .await
-        .map_err(|e| AppError::RequestError(e))?;
+        .map_err(|e| AppError::RequestError(e.to_string()))?;
 
     // 提取版本号（去除v前缀）
     let latest_version = release["tag_name"]
@@ -175,7 +175,7 @@ pub async fn download_and_install_update(
     // 创建文件（使用代码块限制作用域）
     {
         let mut file = File::create(&target_path)
-            .map_err(|e| AppError::IoError(e))?;
+            .map_err(|e| AppError::IoError(e.to_string()))?;
 
         let mut downloaded = 0;
         let mut stream = response.bytes_stream();
@@ -183,7 +183,7 @@ pub async fn download_and_install_update(
         while let Some(chunk_result) = stream.next().await {
             let chunk = chunk_result.map_err(|e| AppError::DownloadError(e.to_string()))?;
             file.write_all(&chunk)
-                .map_err(|e| AppError::IoError(e))?;
+                .map_err(|e| AppError::IoError(e.to_string()))?;
 
             downloaded += chunk.len() as u64;
             let progress = ((downloaded as f64 / total_size as f64) * 90.0) as u32 + 5; // 5-95%

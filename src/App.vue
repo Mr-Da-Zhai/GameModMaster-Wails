@@ -1,7 +1,16 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { darkTheme, NConfigProvider, NIcon, NScrollbar, NBadge, NTooltip } from 'naive-ui'
+import {
+  darkTheme,
+  NConfigProvider,
+  NIcon,
+  NScrollbar,
+  NBadge,
+  NTooltip,
+  zhCN,
+  dateZhCN
+} from 'naive-ui'
 import {
   HomeOutline,
   DownloadOutline,
@@ -131,7 +140,12 @@ onMounted(async () => {
 </script>
 
 <template>
-  <n-config-provider :theme="theme" :theme-overrides="themeOverrides">
+  <n-config-provider
+    :theme="theme"
+    :theme-overrides="themeOverrides"
+    :locale="isDark ? zhCN : zhCN"
+    :date-locale="isDark ? dateZhCN : dateZhCN"
+  >
     <n-global-style />
     <n-message-provider>
       <n-modal-provider>

@@ -2,7 +2,7 @@
   "$schema": "../node_modules/@tauri-apps/cli/schema.json",
   "identifier": "com.gamemodmaster.dev",
   "productName": "GameMod Master",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "build": {
     "beforeBuildCommand": "pnpm build",
     "beforeDevCommand": "pnpm dev",
@@ -11,7 +11,11 @@
   },
   "app": {
     "security": {
-      "csp": null
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["$CACHE/**", "$RESOURCE/**", "**"]
+      }
     },
     "windows": [
       {

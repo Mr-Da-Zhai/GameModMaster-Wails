@@ -25,7 +25,7 @@ pub fn validate_zip(zip_path: &PathBuf) -> AppResult<()> {
             // 检查是否是中央目录结束标记缺失的错误
             let error_str = e.to_string();
             if error_str.contains("central directory") || error_str.contains("end of central directory") {
-                return Err(AppError::ZipError(e).with_details("压缩文件错误: invalid Zip archive: Could not find central directory end"));
+                return Err(AppError::ZipError(format!("压缩文件错误: invalid Zip archive: Could not find central directory end")));
             }
 
             // 检查文件大小
@@ -35,7 +35,7 @@ pub fn validate_zip(zip_path: &PathBuf) -> AppResult<()> {
             }
 
             // 转换其他错误类型
-            Err(AppError::ZipError(e))
+            Err(AppError::ZipError(e.to_string()))
         }
     }
 }

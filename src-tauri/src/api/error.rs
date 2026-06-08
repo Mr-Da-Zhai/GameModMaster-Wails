@@ -18,6 +18,7 @@ pub enum ErrorCode {
     NotFound = 9000,
     Permission = 10000,
     Execution = 11000,
+    Database = 12000,
     Unknown = 99999,
 }
 
@@ -26,13 +27,13 @@ pub enum ErrorCode {
 #[derive(Debug, Error)]
 pub enum AppError {
     #[error("网络请求失败: {0}")]
-    RequestError(#[from] reqwest::Error),
+    RequestError(String),
 
     #[error("HTML解析失败: {0}")]
     ParseError(String),
 
     #[error("IO操作错误: {0}")]
-    IoError(#[from] std::io::Error),
+    IoError(String),
 
     #[error("下载错误: {0}")]
     DownloadError(String),
@@ -41,10 +42,10 @@ pub enum AppError {
     ConfigError(String),
 
     #[error("JSON解析错误: {0}")]
-    JsonError(#[from] serde_json::Error),
+    JsonError(String),
 
     #[error("压缩文件错误: {0}")]
-    ZipError(#[from] ZipError),
+    ZipError(String),
 
     #[error("验证失败: {0}")]
     ValidationError(String),
@@ -58,8 +59,58 @@ pub enum AppError {
     #[error("执行错误: {0}")]
     ExecutionError(String),
 
+    #[error("数据库错误: {0}")]
+    DatabaseError(String),
+
     #[error("未知错误: {0}")]
     UnknownError(String),
+}
+
+// 手动实现 From<reqwest::Error>
+impl From<reqwest::Error> for AppError {
+    fn from(err: reqwest::Error) -> Self {
+        AppError::RequestError(err.to_string())
+    }
+}
+
+// 手动实现 From<std::io::Error>
+impl From<std::io::Error> for AppError {
+    fn from(err: std::io::Error) -> Self {
+        AppError::IoError(err.to_string())
+    }
+}
+
+// 手动实现 From<serde_json::Error>
+impl From<serde_json::Error> for AppError {
+    fn from(err: serde_json::Error) -> Self {
+        AppError::JsonError(err.to_string())
+    }
+}
+
+// 手动实现 From<ZipError>
+impl From<ZipError> for AppError {
+    fn from(err: ZipError) -> Self {
+        AppError::ZipError(err.to_string())
+    }
+}
+
+// 实现 From<anyhow::Error> 以支持 storage 模块的错误转换
+impl From<anyhow::Error> for AppError {
+    fn from(err: anyhow::Error) -> Self {
+        // 尝试向下转换为已知的错误类型
+        if let Some(io_err) = err.downcast_ref::<std::io::Error>() {
+            return AppError::IoError(io_err.to_string());
+        }
+        if let Some(json_err) = err.downcast_ref::<serde_json::Error>() {
+            return AppError::JsonError(json_err.to_string());
+        }
+        if let Some(zip_err) = err.downcast_ref::<ZipError>() {
+            return AppError::ZipError(zip_err.to_string());
+        }
+
+        // 默认转换为数据库错误
+        AppError::DatabaseError(err.to_string())
+    }
 }
 
 // 错误详细信息
@@ -96,6 +147,7 @@ impl AppError {
             AppError::NotFoundError(_) => ErrorCode::NotFound,
             AppError::PermissionError(_) => ErrorCode::Permission,
             AppError::ExecutionError(_) => ErrorCode::Execution,
+            AppError::DatabaseError(_) => ErrorCode::Database,
             AppError::UnknownError(_) => ErrorCode::Unknown,
         }
     }
@@ -129,6 +181,7 @@ impl AppError {
             AppError::NotFoundError(msg) => format!("未找到资源: {}", msg),
             AppError::PermissionError(_) => "权限不足，请以管理员身份运行应用程序".to_string(),
             AppError::ExecutionError(_) => "执行操作失败，请确保系统满足运行要求".to_string(),
+            AppError::DatabaseError(_) => "数据库操作失败，请重启应用程序".to_string(),
             AppError::UnknownError(_) => "发生未知错误，请尝试重启应用程序".to_string(),
         }
     }
@@ -144,16 +197,16 @@ impl AppError {
 
         // 对于特定错误类型添加更多信息
         match self {
-            AppError::RequestError(e) => {
-                if e.is_timeout() {
-                    warn!("[网络超时] 请求超时: {}", e);
+            AppError::RequestError(msg) => {
+                if msg.contains("timeout") {
+                    warn!("[网络超时] 请求超时: {}", msg);
                 }
-                if e.is_connect() {
-                    warn!("[网络连接] 连接失败: {}", e);
+                if msg.contains("connect") {
+                    warn!("[网络连接] 连接失败: {}", msg);
                 }
             }
-            AppError::IoError(e) => {
-                warn!("[IO错误] 类型: {:?}, 消息: {}", e.kind(), e);
+            AppError::IoError(msg) => {
+                warn!("[IO错误] 消息: {}", msg);
             }
             _ => {}
         }

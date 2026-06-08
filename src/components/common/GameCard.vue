@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useMessage, useDialog } from 'naive-ui'
 import { DownloadOutline, PlayOutline, TrashOutline, TimeOutline } from '@vicons/ionicons5'
 import type { Trainer } from '@/types'
 import { useTrainerStore } from '@/stores/trainer'
 import { useI18n } from 'vue-i18n'
+import { getCachedImageUrl } from '@/services/imageCacheService'
 
 const props = defineProps<{
   trainer: Trainer
@@ -21,13 +22,43 @@ const message = useMessage()
 const dialog = useDialog()
 
 const isDownloaded = computed(() => {
-  return store.downloadedTrainers.some((t) => t.id === props.trainer.id)
+  // 使用 Set.has() 替代 Array.some()，性能从 O(n) 提升到 O(1)
+  return store.downloadedIds.has(props.trainer.id)
 })
+
+// Cached image URL state
+const cachedImageUrl = ref<string>(props.trainer.thumbnail || '/placeholder.png')
+
+// Load cached image on mount
+onMounted(async () => {
+  await loadCachedImage()
+})
+
+// Watch for trainer changes
+watch(() => props.trainer.thumbnail, async () => {
+  await loadCachedImage()
+})
+
+async function loadCachedImage() {
+  if (props.trainer.thumbnail) {
+    try {
+      cachedImageUrl.value = await getCachedImageUrl(props.trainer.thumbnail)
+    } catch (error) {
+      console.error('Failed to load cached image:', error)
+      cachedImageUrl.value = '/placeholder.png'
+    }
+  }
+}
 
 const formatDate = (dateString: string) => {
   if (!dateString) return ''
   const date = new Date(dateString)
   return new Intl.DateTimeFormat(locale.value, { month: 'short', day: 'numeric' }).format(date)
+}
+
+const handleImageError = (e: Event) => {
+  const target = e.target as HTMLImageElement
+  target.src = '/placeholder.png'
 }
 
 const handleCardClick = () => {
@@ -79,10 +110,11 @@ const handleDelete = async (e: Event) => {
   <div class="game-card" @click="handleCardClick">
     <div class="card-cover">
       <img
-        :src="trainer.thumbnail || '/placeholder.png'"
+        :src="cachedImageUrl"
         :alt="trainer.name"
         class="cover-image"
         loading="lazy"
+        @error="handleImageError"
       />
       <div class="cover-overlay">
         <span class="view-hint">{{ t('gameCard.viewDetail') }}</span>

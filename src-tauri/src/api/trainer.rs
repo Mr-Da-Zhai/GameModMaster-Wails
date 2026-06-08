@@ -42,7 +42,7 @@ pub async fn get_trainer_detail(id: String) -> AppResult<Trainer> {
 pub async fn download_trainer<R: Runtime>(
     app_handle: tauri::AppHandle<R>,
     trainer: Trainer,
-) -> AppResult<PathBuf> {
+) -> AppResult<Trainer> {
     trainer_service::download_trainer(app_handle, trainer).await
 }
 

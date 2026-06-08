@@ -16,6 +16,28 @@ const CACHE_CONFIG = {
   retryDelay: 1000,
 }
 
+// 应用版本（用于数据兼容性检测）
+const APP_VERSION = '2.0.0'
+
+/**
+ * 检查并清理旧版本数据
+ */
+async function checkAndCleanOldData() {
+  try {
+    const storedVersion = localStorage.getItem('app_version')
+    if (storedVersion && storedVersion !== APP_VERSION) {
+      console.log('Store: 检测到版本不匹配，清理旧数据')
+      localStorage.clear()
+      localStorage.setItem('app_version', APP_VERSION)
+      console.log('Store: 旧数据清理完成')
+    } else if (!storedVersion) {
+      localStorage.setItem('app_version', APP_VERSION)
+    }
+  } catch (err) {
+    console.warn('Store: 版本检查失败:', err)
+  }
+}
+
 declare global {
   interface Window {
     $message: MessageApi
@@ -34,6 +56,10 @@ export const useTrainerStore = defineStore('trainer', () => {
   const totalPages = ref(1)
   const lastUpdated = ref(Date.now()) // 上次更新时间
   const isStorageMigrated = ref(StorageService.isMigrated()) // 存储迁移状态
+
+  // 优化的计算属性 - 使用 Set 提升查找性能
+  const downloadedIds = computed(() => new Set(downloadedTrainers.value.map(t => t.id)))
+  const installedIds = computed(() => new Set(installedTrainers.value.map(t => t.id)))
 
   // 计算属性
   const recentlyInstalledTrainers = computed(() => {
@@ -60,6 +86,9 @@ export const useTrainerStore = defineStore('trainer', () => {
       isLoading.value = true
       error.value = null
 
+      // 检查并清理旧版本数据
+      await checkAndCleanOldData()
+
       // 首先检查并执行存储迁移
       if (!isStorageMigrated.value) {
         console.log('Store: 开始存储迁移')
@@ -68,7 +97,7 @@ export const useTrainerStore = defineStore('trainer', () => {
         console.log('Store: 存储迁移完成')
       }
 
-      // 从新存储加载数据
+      // 从新存储加载数据（本地数据，应该很快）
       const [installed, downloaded] = await Promise.all([
         StorageService.getInstalledTrainers(),
         StorageService.getDownloadedTrainers()
@@ -77,31 +106,35 @@ export const useTrainerStore = defineStore('trainer', () => {
       installedTrainers.value = installed
       downloadedTrainers.value = downloaded
 
-      console.log('Store: 已加载数据:', {
+      console.log('Store: 已加载本地数据:', {
         installed: installedTrainers.value.length,
         downloaded: downloadedTrainers.value.length,
         migrated: isStorageMigrated.value,
       })
 
-      // 清理过期缓存
-      await StorageService.cleanExpiredCache()
-
-      // 初始加载修改器列表
-      await fetchTrainers(1)
-      console.log('Store: 初始化完成', {
-        trainersCount: trainers.value.length,
-        installedCount: installedTrainers.value.length,
+      // 清理过期缓存（异步执行，不阻塞）
+      StorageService.cleanExpiredCache().catch(err => {
+        console.warn('Store: 清理缓存失败:', err)
       })
+
+      // 标记初始化完成（不等待网络请求）
+      isLoading.value = false
+      console.log('Store: 初始化完成（本地数据已加载）')
 
       // 更新最后刷新时间
       lastUpdated.value = Date.now()
+
+      // 在后台异步加载远程修改器列表（不阻塞初始化）
+      fetchTrainers(1).then(() => {
+        console.log('Store: 后台加载远程数据完成')
+      }).catch(err => {
+        console.warn('Store: 后台加载远程数据失败:', err)
+      })
     } catch (err) {
       console.error('Store: 初始化失败:', err)
       error.value = err instanceof Error ? err.message : '加载数据失败'
       handleError(err, window.$message)
-    } finally {
       isLoading.value = false
-      console.log('Store: 加载状态已重置')
     }
   }
 
@@ -209,24 +242,75 @@ export const useTrainerStore = defineStore('trainer', () => {
     error.value = null
   }
 
-  // 获取修改器列表（优化版本）
-  async function fetchTrainers(page: number) {
+  // 所有已缓存的修改器（用于本地搜索和分页）
+  const allCachedTrainers = ref<Trainer[]>([])
+  const pageSize = ref(12) // 每页显示条数
+  const isCacheLoaded = ref(false) // 缓存是否已加载
+
+  // 获取修改器列表（优化版本，支持本地分页）
+  async function fetchTrainers(page: number, newPageSize?: number) {
     try {
       isLoading.value = true
       error.value = null
       currentPage.value = page
 
-      // 检查缓存是否有效
-      const cachedData = await StorageService.getCachedTrainerList(page)
-      if (cachedData) {
-        console.log('Store: 使用缓存的修改器列表，页码:', page)
-        trainers.value = cachedData
-        // 估算总页数（假设每页20条记录）
-        totalPages.value = Math.ceil(100 / 20) // 使用一个默认值
+      // 更新每页条数
+      if (newPageSize) {
+        pageSize.value = newPageSize
+      }
+
+      // 如果缓存中有数据，使用本地分页
+      if (allCachedTrainers.value.length > 0 && !searchQuery.value.trim()) {
+        console.log('Store: 使用本地缓存数据进行分页，页码:', page, '每页:', pageSize.value, '总数:', allCachedTrainers.value.length)
+        const start = (page - 1) * pageSize.value
+        const end = start + pageSize.value
+        trainers.value = allCachedTrainers.value.slice(start, end)
+        totalPages.value = Math.ceil(allCachedTrainers.value.length / pageSize.value)
+        isLoading.value = false
         return
       }
 
-      // 发起API请求
+      // 如果缓存未加载，先加载所有缓存数据（获取前 6 页，约 120 条记录）
+      if (!isCacheLoaded.value && !searchQuery.value.trim()) {
+        console.log('Store: 开始加载所有数据用于本地分页...')
+        const allTrainers: Trainer[] = []
+
+        // 获取前 6 页数据
+        for (let p = 1; p <= 6; p++) {
+          try {
+            const response = await withRetry(() =>
+              invoke<{
+                trainers: Trainer[]
+                total: number
+              }>('fetch_trainers', { page: p }),
+            )
+            allTrainers.push(...response.trainers)
+
+            // 如果返回的数据少于预期，说明已经到了最后一页
+            if (response.trainers.length === 0) {
+              break
+            }
+          } catch (err) {
+            console.warn(`Store: 获取第 ${p} 页数据失败:`, err)
+            break
+          }
+        }
+
+        // 缓存所有数据
+        allCachedTrainers.value = allTrainers
+        isCacheLoaded.value = true
+        console.log('Store: 已缓存所有数据，总数:', allTrainers.length)
+
+        // 使用本地分页返回第一页
+        const start = (page - 1) * pageSize.value
+        const end = start + pageSize.value
+        trainers.value = allCachedTrainers.value.slice(start, end)
+        totalPages.value = Math.ceil(allCachedTrainers.value.length / pageSize.value)
+        isLoading.value = false
+        return
+      }
+
+      // 发起API请求（用于搜索等场景）
       const response = await withRetry(() =>
         invoke<{
           trainers: Trainer[]
@@ -238,9 +322,6 @@ export const useTrainerStore = defineStore('trainer', () => {
       // 估算总页数（假设每页20条记录）
       totalPages.value = Math.ceil(response.total / 20)
 
-      // 缓存结果
-      await StorageService.cacheTrainerList(page, response.trainers)
-
       console.log('Store: 已获取修改器列表，页码:', page, '总数:', response.trainers.length)
     } catch (err) {
       console.error('Store: 获取修改器列表失败:', err)
@@ -251,7 +332,7 @@ export const useTrainerStore = defineStore('trainer', () => {
     }
   }
 
-  // 搜索修改器（优化版本）
+  // 搜索修改器（优化版本，支持中文名和别名）
   async function searchTrainers(query: string, page = 1) {
     try {
       if (!query.trim()) {
@@ -284,7 +365,7 @@ export const useTrainerStore = defineStore('trainer', () => {
       totalPages.value = Math.ceil(response.total / 20)
 
       // 缓存结果
-      await StorageService.cacheSearchResults(query, page, response.trainers)
+      await StorageService.cacheSearchResults(query, page, trainers.value)
 
       console.log(
         'Store: 搜索完成，查询:',
@@ -292,7 +373,7 @@ export const useTrainerStore = defineStore('trainer', () => {
         '页码:',
         page,
         '结果数:',
-        response.trainers.length,
+        trainers.value.length,
       )
     } catch (err) {
       console.error('Store: 搜索失败:', err)
@@ -317,13 +398,20 @@ export const useTrainerStore = defineStore('trainer', () => {
   // 下载修改器
   async function downloadTrainer(trainer: Trainer) {
     try {
-      const result = await invoke<string>('download_trainer', { trainer })
+      const result = await invoke<Trainer>('download_trainer', { trainer })
 
-      // 添加到下载记录
-      const exists = downloadedTrainers.value.some((t) => t.id === trainer.id)
+      // 添加到下载记录（使用后端返回的翻译后的trainer对象）
+      const exists = downloadedTrainers.value.some((t) => t.id === result.id)
       if (!exists) {
-        downloadedTrainers.value.push(trainer)
+        downloadedTrainers.value.push(result) // 使用翻译后的trainer
         await StorageService.saveDownloadedTrainers(downloadedTrainers.value)
+      } else {
+        // 如果已存在，更新为中文名
+        const index = downloadedTrainers.value.findIndex((t) => t.id === result.id)
+        if (index !== -1) {
+          downloadedTrainers.value[index] = result
+          await StorageService.saveDownloadedTrainers(downloadedTrainers.value)
+        }
       }
 
       // 检查是否需要自动打开文件夹
@@ -386,6 +474,8 @@ export const useTrainerStore = defineStore('trainer', () => {
     // 计算属性
     recentlyInstalledTrainers,
     recentlyLaunchedTrainers,
+    downloadedIds,
+    installedIds,
 
     // 方法
     initialize,
@@ -405,7 +495,9 @@ export const useTrainerStore = defineStore('trainer', () => {
     // 缓存管理
     cleanCache: StorageService.cleanExpiredCache,
     refreshData: () => {
-      // 强制刷新数据
+      // 强制刷新数据（清除缓存并重新加载）
+      allCachedTrainers.value = []
+      isCacheLoaded.value = false
       lastUpdated.value = Date.now()
       return fetchTrainers(currentPage.value)
     },

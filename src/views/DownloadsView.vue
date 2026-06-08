@@ -3,7 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { DownloadOutline, SearchOutline, FolderOpenOutline, GameControllerOutline } from '@vicons/ionicons5'
 import { useTrainerStore } from '../stores/trainer'
-import GameCard from '@/components/common/GameCard.vue'
+import TrainerListItem from '@/components/common/TrainerListItem.vue'
 import { invoke } from '@tauri-apps/api/core'
 import { useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
@@ -27,6 +27,13 @@ const filteredTrainers = computed(() => {
     )
   }
 
+  // 按最后使用时间排序（最近使用的排前面）
+  result.sort((a, b) => {
+    const timeA = a.last_launch_time ? new Date(a.last_launch_time).getTime() : 0
+    const timeB = b.last_launch_time ? new Date(b.last_launch_time).getTime() : 0
+    return timeB - timeA // 降序，最近的使用时间在前
+  })
+
   return result
 })
 
@@ -39,9 +46,10 @@ const openDownloadFolder = async () => {
   }
 }
 
-onMounted(() => {
-  if (store.downloadedTrainers.length === 0) {
-    store.initialize()
+onMounted(async () => {
+  // 如果本地数据为空，尝试初始化（现在初始化会很快，因为不等待网络请求）
+  if (store.downloadedTrainers.length === 0 && !store.isLoading) {
+    await store.initialize()
   }
 })
 </script>
@@ -116,12 +124,11 @@ onMounted(() => {
       </NButton>
     </div>
 
-    <div v-else class="trainers-grid">
-      <GameCard
+    <div v-else class="trainers-list">
+      <TrainerListItem
         v-for="trainer in filteredTrainers"
         :key="trainer.id"
         :trainer="trainer"
-        showButtons="downloaded"
       />
     </div>
   </div>
@@ -156,6 +163,10 @@ onMounted(() => {
   color: #64748b;
 }
 
+.dark .page-subtitle {
+  color: #94a3b8;
+}
+
 .stats-bar {
   display: flex;
   gap: 24px;
@@ -172,6 +183,10 @@ onMounted(() => {
   border-radius: 12px;
 }
 
+.dark .stat-item {
+  background: rgba(30, 41, 59, 0.8);
+}
+
 .stat-value {
   font-size: 1.5rem;
   font-weight: 800;
@@ -182,6 +197,10 @@ onMounted(() => {
   font-size: 0.875rem;
   color: #64748b;
   font-weight: 600;
+}
+
+.dark .stat-label {
+  color: #94a3b8;
 }
 
 .search-bar {
@@ -195,6 +214,10 @@ onMounted(() => {
   margin-bottom: 24px;
 }
 
+.dark .search-bar {
+  background: rgba(30, 41, 59, 0.9);
+}
+
 .search-icon {
   color: #94a3b8;
 }
@@ -205,6 +228,15 @@ onMounted(() => {
   background: transparent;
   font-size: 0.938rem;
   outline: none;
+  color: #1f2937;
+}
+
+.dark .search-input {
+  color: #e2e8f0;
+}
+
+.search-input::placeholder {
+  color: #94a3b8;
 }
 
 .loading-state,
@@ -225,14 +257,34 @@ onMounted(() => {
   color: #1f2937;
 }
 
+.dark .empty-state h3 {
+  color: #e2e8f0;
+}
+
 .empty-state p {
   margin: 0;
   color: #64748b;
 }
 
-.trainers-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 20px;
+.dark .empty-state p {
+  color: #94a3b8;
+}
+
+.trainers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+@media (max-width: 768px) {
+  .stats-bar {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .stat-item {
+    width: 100%;
+    justify-content: center;
+  }
 }
 </style>

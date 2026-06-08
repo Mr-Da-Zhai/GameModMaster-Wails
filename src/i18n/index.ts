@@ -26,8 +26,8 @@ const messages = {
       noData: '暂无数据',
     },
     nav: {
-      explore: '探索',
-      downloads: '收藏',
+      explore: '搜索新修改器',
+      downloads: '已下载修改器',
       settings: '设置',
     },
     home: {
@@ -51,7 +51,7 @@ const messages = {
       },
     },
     downloads: {
-      title: '我的收藏',
+      title: '已下载修改器',
       subtitle: '管理已下载的游戏修改器',
       stats: {
         downloaded: '已下载',
@@ -60,7 +60,7 @@ const messages = {
       searchPlaceholder: '搜索已下载的修改器...',
       empty: {
         title: '还没有下载任何修改器',
-        subtitle: '去探索页面下载游戏修改器吧',
+        subtitle: '去搜索新修改器页面下载游戏修改器吧',
         searchTitle: '没有找到结果',
         searchSubtitle: '没有找到 "{query}" 相关的修改器',
       },

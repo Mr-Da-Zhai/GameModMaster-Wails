@@ -122,6 +122,11 @@ fn main() {
             services::download_manager::clear_all_downloads,
             services::download_manager::get_download_directory,
             services::download_manager::open_download_directory,
+            // 图片缓存API
+            services::image_cache::get_cached_image,
+            services::image_cache::cleanup_image_cache,
+            services::image_cache::get_cache_stats,
+            services::image_cache::clear_image_cache,
             // 日志API
             services::logger::get_log_dir,
             services::logger::export_latest_log
