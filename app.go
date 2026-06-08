@@ -33,15 +33,11 @@ type AppService struct {
 	dataDir         string
 }
 
-// NewAppService creates a new AppService with nil fields.
-// Call Startup() to initialize everything.
-func NewAppService() *AppService {
-	return &AppService{}
-}
+// NewAppService creates and initializes the AppService.
+// embeddedMapping is the name_mapping.json data embedded in the binary.
+func NewAppService(embeddedMapping []byte) *AppService {
+	a := &AppService{}
 
-// Startup is called when the Wails app starts. It initializes the database,
-// repositories, services, and in-memory index.
-func (a *AppService) Startup() {
 	// 1. Determine data directory
 	a.resolveDataDir()
 	log.Printf("[AppService] Data directory: %s", a.dataDir)
@@ -59,17 +55,14 @@ func (a *AppService) Startup() {
 	a.trainerRepo = repo.NewTrainerRepo(a.db)
 	a.stateRepo = repo.NewStateRepo(a.db)
 
-	// 4. Load name mapping
+	// 4. Load name mapping from embedded data
 	a.mappingService = service.NewMappingService()
-	mappingPath := a.findFile("data/name_mapping.json")
-	if mappingPath != "" {
-		if err := a.mappingService.Load(mappingPath); err != nil {
+	if len(embeddedMapping) > 0 {
+		if err := a.mappingService.LoadFromBytes(embeddedMapping); err != nil {
 			log.Printf("[AppService] Warning: failed to load name mapping: %v", err)
 		} else {
-			log.Printf("[AppService] Name mapping loaded from %s", mappingPath)
+			log.Printf("[AppService] Name mapping loaded (%d entries)", len(a.mappingService.GetMapping()))
 		}
-	} else {
-		log.Println("[AppService] Warning: name_mapping.json not found, names will not be translated")
 	}
 
 	// 5. Build memory index from database
@@ -84,6 +77,8 @@ func (a *AppService) Startup() {
 	// 6. Init scraper and download services
 	a.scraperService = scraper.NewScraper(a.gameRepo, a.trainerRepo, a.mappingService)
 	a.downloadService = service.NewDownloadService(a.stateRepo)
+
+	return a
 }
 
 // Shutdown closes the database connection on app exit.
@@ -119,26 +114,6 @@ func (a *AppService) resolveDataDir() {
 		configDir = "."
 	}
 	a.dataDir = filepath.Join(configDir, "GameModMaster", "data")
-}
-
-// findFile tries to locate a file beside the exe first, then relative to cwd.
-func (a *AppService) findFile(relPath string) string {
-	// Try beside exe
-	exePath, err := os.Executable()
-	if err == nil {
-		candidate := filepath.Join(filepath.Dir(exePath), relPath)
-		if _, err := os.Stat(candidate); err == nil {
-			return candidate
-		}
-	}
-
-	// Try relative to working directory
-	if _, err := os.Stat(relPath); err == nil {
-		abs, _ := filepath.Abs(relPath)
-		return abs
-	}
-
-	return ""
 }
 
 // refreshIndex reloads the in-memory index from the database.

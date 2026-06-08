@@ -10,8 +10,11 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
+//go:embed data/name_mapping.json
+var nameMappingData []byte
+
 func main() {
-	appService := NewAppService()
+	appService := NewAppService(nameMappingData)
 
 	app := application.New(application.Options{
 		Name:        "GameModMaster",
@@ -28,10 +31,10 @@ func main() {
 	})
 
 	app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title:  "GameModMaster - 游戏修改器大师",
-		Width:  1200,
-		Height: 800,
-		MinWidth: 900,
+		Title:     "GameModMaster - 游戏修改器大师",
+		Width:     1200,
+		Height:    800,
+		MinWidth:  900,
 		MinHeight: 600,
 		Mac: application.MacWindow{
 			InvisibleTitleBarHeight: 50,

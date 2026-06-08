@@ -33,7 +33,11 @@ func (s *MappingService) Load(filepath string) error {
 	if err != nil {
 		return err
 	}
+	return s.LoadFromBytes(data)
+}
 
+// LoadFromBytes parses name mapping from raw JSON bytes.
+func (s *MappingService) LoadFromBytes(data []byte) error {
 	var entries []nameEntry
 	if err := json.Unmarshal(data, &entries); err != nil {
 		return err
