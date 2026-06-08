@@ -4,7 +4,7 @@
 
 /**
  * AppService is the main service exposed to the Wails frontend.
- * Methods on this struct are callable from JavaScript via Wails bindings.
+ * All methods on this struct are callable from JavaScript via Wails bindings.
  * @module
  */
 
@@ -13,11 +13,148 @@
 import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Create } from "@wailsio/runtime";
 
 /**
- * Greet returns a greeting for the given name.
- * This is a placeholder — real methods will be added in Phase 3.
- * @param {string} name
+ * DeleteTrainer removes a downloaded/installed trainer.
+ * @param {number} trainerID
+ * @returns {$CancellablePromise<void>}
+ */
+export function DeleteTrainer(trainerID) {
+    return $Call.ByID(73366834, trainerID);
+}
+
+/**
+ * DownloadTrainer downloads a trainer file.
+ * @param {number} trainerID
+ * @returns {$CancellablePromise<void>}
+ */
+export function DownloadTrainer(trainerID) {
+    return $Call.ByID(1680021711, trainerID);
+}
+
+/**
+ * GetDataDir returns the data directory path.
  * @returns {$CancellablePromise<string>}
  */
-export function Greet(name) {
-    return $Call.ByID(3460737983, name);
+export function GetDataDir() {
+    return $Call.ByID(655531069);
 }
+
+/**
+ * GetDownloadedTrainers returns all trainers with status = downloaded or installed.
+ * @returns {$CancellablePromise<{ [_ in string]?: any }[]>}
+ */
+export function GetDownloadedTrainers() {
+    return $Call.ByID(3522053005).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType1($result);
+    }));
+}
+
+/**
+ * GetInstalledTrainers returns all trainers with status = installed.
+ * @returns {$CancellablePromise<{ [_ in string]?: any }[]>}
+ */
+export function GetInstalledTrainers() {
+    return $Call.ByID(1357693582).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType1($result);
+    }));
+}
+
+/**
+ * GetSettings returns app settings from kv_store.
+ * @returns {$CancellablePromise<{ [_ in string]?: any }>}
+ */
+export function GetSettings() {
+    return $Call.ByID(3018893939).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType0($result);
+    }));
+}
+
+/**
+ * GetTrainerDetail returns detail for a specific game (all trainer versions).
+ * @param {number} gameID
+ * @returns {$CancellablePromise<{ [_ in string]?: any }>}
+ */
+export function GetTrainerDetail(gameID) {
+    return $Call.ByID(2168190618, gameID).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType0($result);
+    }));
+}
+
+/**
+ * GetTrainers returns paginated trainers for the home page.
+ * Returns games sorted by update time with their trainer info and states.
+ * @param {number} page
+ * @param {number} pageSize
+ * @returns {$CancellablePromise<{ [_ in string]?: any }[]>}
+ */
+export function GetTrainers(page, pageSize) {
+    return $Call.ByID(3275446408, page, pageSize).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType1($result);
+    }));
+}
+
+/**
+ * InstallTrainer installs a downloaded trainer.
+ * @param {number} trainerID
+ * @returns {$CancellablePromise<void>}
+ */
+export function InstallTrainer(trainerID) {
+    return $Call.ByID(2170736966, trainerID);
+}
+
+/**
+ * LaunchTrainer launches an installed trainer executable.
+ * @param {number} trainerID
+ * @returns {$CancellablePromise<void>}
+ */
+export function LaunchTrainer(trainerID) {
+    return $Call.ByID(3314639258, trainerID);
+}
+
+/**
+ * RefreshData fetches latest data from flingtrainer.com and updates DB.
+ * @returns {$CancellablePromise<void>}
+ */
+export function RefreshData() {
+    return $Call.ByID(983148913);
+}
+
+/**
+ * SaveSettings saves settings to kv_store.
+ * @param {{ [_ in string]?: any }} settings
+ * @returns {$CancellablePromise<void>}
+ */
+export function SaveSettings(settings) {
+    return $Call.ByID(3784651466, settings);
+}
+
+/**
+ * SearchTrainers searches by query (Chinese or English).
+ * @param {string} query
+ * @returns {$CancellablePromise<{ [_ in string]?: any }[]>}
+ */
+export function SearchTrainers(query) {
+    return $Call.ByID(903045308, query).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType1($result);
+    }));
+}
+
+/**
+ * Shutdown closes the database connection on app exit.
+ * @returns {$CancellablePromise<void>}
+ */
+export function Shutdown() {
+    return $Call.ByID(780008012);
+}
+
+/**
+ * Startup is called when the Wails app starts. It initializes the database,
+ * repositories, services, and in-memory index.
+ * @returns {$CancellablePromise<void>}
+ */
+export function Startup() {
+    return $Call.ByID(2617913455);
+}
+
+// Private type creation functions
+const $$createType0 = $Create.Map($Create.Any, $Create.Any);
+const $$createType1 = $Create.Array($$createType0);
