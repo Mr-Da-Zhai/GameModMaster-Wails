@@ -9,10 +9,12 @@ import {
   NIcon,
   NImage,
   NSpin,
+  NEmpty,
+  NSkeleton,
 } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
-import { RefreshOutline } from '@vicons/ionicons5'
-import { useTrainerStore, type TrainerItem } from '../stores/trainer'
+import { RefreshOutline, CloudDownloadOutline } from '@vicons/ionicons5'
+import { useTrainerStore, type GameEntry } from '../stores/trainer'
 
 const router = useRouter()
 const store = useTrainerStore()
@@ -36,8 +38,8 @@ function handleRefresh() {
   store.refreshData()
 }
 
-function getGameName(row: TrainerItem): string {
-  return row.name_local || row.name_en || 'Unknown'
+function handleLoadData() {
+  store.refreshData()
 }
 
 function getStatusInfo(status: number): { label: string; type: 'default' | 'info' | 'success' } {
@@ -57,11 +59,18 @@ function formatDate(timestamp: number): string {
   return `${d.getMonth() + 1}/${d.getDate()}`
 }
 
-function handleRowClick(row: TrainerItem) {
-  router.push({ name: 'detail', params: { id: row.game_id } })
+function formatFileSize(size: number): string {
+  if (!size) return '-'
+  if (size < 1024) return `${size}B`
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)}KB`
+  return `${(size / (1024 * 1024)).toFixed(1)}MB`
 }
 
-const columns: DataTableColumns<TrainerItem> = [
+function handleRowClick(row: GameEntry) {
+  router.push({ name: 'detail', params: { id: row.id } })
+}
+
+const columns: DataTableColumns<GameEntry> = [
   {
     title: '封面',
     key: 'cover_url',
@@ -92,11 +101,11 @@ const columns: DataTableColumns<TrainerItem> = [
   },
   {
     title: '游戏名称',
-    key: 'name',
+    key: 'display_name',
     minWidth: 200,
     ellipsis: { tooltip: true },
     render(row) {
-      return h('span', { style: { fontWeight: '500' } }, getGameName(row))
+      return h('span', { style: { fontWeight: '500' } }, row.display_name || row.name_en || 'Unknown')
     },
   },
   {
@@ -105,6 +114,24 @@ const columns: DataTableColumns<TrainerItem> = [
     width: 80,
     align: 'center',
     sorter: (a, b) => a.options_num - b.options_num,
+  },
+  {
+    title: '版本',
+    key: 'version',
+    width: 100,
+    ellipsis: { tooltip: true },
+    render(row) {
+      return row.latest_trainer?.version || '-'
+    },
+  },
+  {
+    title: '大小',
+    key: 'file_size',
+    width: 90,
+    align: 'center',
+    render(row) {
+      return row.latest_trainer ? formatFileSize(row.latest_trainer.file_size) : '-'
+    },
   },
   {
     title: '状态',
@@ -130,28 +157,28 @@ const columns: DataTableColumns<TrainerItem> = [
   {
     title: '操作',
     key: 'actions',
-    width: 120,
+    width: 100,
     align: 'center',
     fixed: 'right',
     render(row) {
       const btnProps = { size: 'small' as const, tertiary: true }
-      if (row.status === 2) {
-        // 已安装 → 启动
-        return h(NButton, { ...btnProps, type: 'success', onClick: (e: Event) => { e.stopPropagation(); store.launchTrainer(row.trainer_id) } }, { default: () => '启动' })
-      } else if (row.status === 1) {
-        // 已下载 → 安装
-        return h(NButton, { ...btnProps, type: 'info', onClick: (e: Event) => { e.stopPropagation(); store.installTrainer(row.trainer_id) } }, { default: () => '安装' })
-      } else {
-        // 可用 → 下载
-        return h(NButton, { ...btnProps, type: 'primary', onClick: (e: Event) => { e.stopPropagation(); store.downloadTrainer(row.trainer_id) } }, { default: () => '下载' })
+      if (row.status === 2 && row.latest_trainer) {
+        return h(NButton, { ...btnProps, type: 'success', onClick: (e: Event) => { e.stopPropagation(); store.launchTrainer(row.latest_trainer!.id) } }, { default: () => '启动' })
+      } else if (row.status === 1 && row.latest_trainer) {
+        return h(NButton, { ...btnProps, type: 'info', onClick: (e: Event) => { e.stopPropagation(); store.installTrainer(row.latest_trainer!.id) } }, { default: () => '安装' })
+      } else if (row.latest_trainer) {
+        return h(NButton, { ...btnProps, type: 'primary', onClick: (e: Event) => { e.stopPropagation(); store.downloadTrainer(row.latest_trainer!.id) } }, { default: () => '下载' })
       }
+      return h('span', { style: { color: '#666' } }, '-')
     },
   },
 ]
 
-const rowKey = (row: TrainerItem) => `${row.game_id}-${row.trainer_id}`
+const rowKey = (row: GameEntry) => row.id
 
 const calcTableHeight = computed(() => window.innerHeight - 140)
+
+const isEmpty = computed(() => !store.loading && !store.refreshing && store.trainers.length === 0)
 </script>
 
 <template>
@@ -181,8 +208,29 @@ const calcTableHeight = computed(() => window.innerHeight - 140)
       </div>
     </div>
 
+    <!-- Loading skeleton -->
+    <div v-if="store.loading && store.trainers.length === 0" class="skeleton-wrapper">
+      <NSkeleton text :repeat="8" />
+    </div>
+
+    <!-- Empty state -->
+    <NEmpty
+      v-else-if="isEmpty"
+      description="暂无数据，首次使用请加载数据"
+      style="padding-top: 80px;"
+    >
+      <template #extra>
+        <NButton type="primary" :loading="store.refreshing" @click="handleLoadData">
+          <template #icon>
+            <NIcon><CloudDownloadOutline /></NIcon>
+          </template>
+          加载数据
+        </NButton>
+      </template>
+    </NEmpty>
+
     <!-- Table -->
-    <NSpin :show="store.loading">
+    <NSpin v-else :show="store.loading">
       <NDataTable
         :columns="columns"
         :data="store.trainers"
@@ -193,7 +241,7 @@ const calcTableHeight = computed(() => window.innerHeight - 140)
         :single-line="false"
         size="small"
         style="cursor: pointer;"
-        :row-props="(row: TrainerItem) => ({ onClick: () => handleRowClick(row) })"
+        :row-props="(row: GameEntry) => ({ onClick: () => handleRowClick(row) })"
       />
     </NSpin>
   </div>
@@ -230,5 +278,9 @@ export default {
   display: flex;
   gap: 8px;
   align-items: center;
+}
+
+.skeleton-wrapper {
+  padding: 20px 0;
 }
 </style>

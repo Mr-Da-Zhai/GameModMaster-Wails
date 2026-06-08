@@ -1,0 +1,26 @@
+{
+  "RT_GROUP_ICON": {
+    "APP": {
+      "0000": [
+        "icon.png"
+      ]
+    }
+  },
+  "RT_MANIFEST": {
+    "#1": {
+      "0409": {
+        "identity": {
+          "name": "GameModMaster",
+          "version": "3.0.0.0"
+        },
+        "description": "GameModMaster",
+        "minimum-os": "win7",
+        "execution-level": "as invoker",
+        "ui-access": false,
+        "auto-elevate": false,
+        "dpi-awareness": "system",
+        "use-common-controls-v6": true
+      }
+    }
+  }
+}

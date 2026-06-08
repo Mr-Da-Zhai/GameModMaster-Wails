@@ -57,6 +57,7 @@ const menuOptions: MenuOption[] = [
       style="background-color: #162130;"
     >
       <div class="logo">
+        <span class="logo-icon">🎮</span>
         <span class="logo-text">GameModMaster</span>
       </div>
       <NMenu
@@ -81,14 +82,19 @@ const menuOptions: MenuOption[] = [
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
   padding: 0 16px 24px;
 }
 
+.logo-icon {
+  font-size: 22px;
+}
+
 .logo-text {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   color: #63e2b7;
-  letter-spacing: 1px;
+  letter-spacing: 0.5px;
   white-space: nowrap;
 }
 </style>

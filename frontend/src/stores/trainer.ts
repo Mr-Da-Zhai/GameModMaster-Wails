@@ -2,31 +2,89 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import * as AppService from '../../bindings/GameModMaster/appservice'
 
-export interface TrainerItem {
+// Matches backend buildGameEntry response
+export interface LatestTrainer {
   id: number
-  game_id: number
+  version: string
+  game_version: string
+  download_count: number
+  file_size: number
+}
+
+export interface GameEntry {
+  id: number
+  source_id: string
   name_en: string
   name_local: string
+  display_name: string
   cover_url: string
   source_url: string
   options_num: number
   updated_at: number
-  // Trainer fields
-  trainer_id: number
+  trainer_count: number
+  latest_trainer?: LatestTrainer
+  status: number // 0=可用 1=已下载 2=已安装
+  local_path: string
+}
+
+// Matches backend buildTrainerWithGameEntry response
+export interface DownloadedTrainer {
+  id: number
+  game_id: number
+  game_name: string
+  game_name_en: string
+  cover_url: string
   version: string
   game_version: string
   download_url: string
   file_size: number
   file_name: string
   download_count: number
-  // State fields
-  status: number // 0=可用 1=已下载 2=已安装
+  source_hash: string
+  updated_at: number
+  status: number // 1=已下载 2=已安装
   local_path: string
   installed_at: number
+  launched_at: number
+}
+
+// Matches backend GetTrainerDetail response
+export interface TrainerDetail {
+  id: number
+  game_id: number
+  version: string
+  game_version: string
+  download_url: string
+  file_size: number
+  file_name: string
+  download_count: number
+  source_hash: string
+  updated_at: number
+  status: number
+  local_path: string
+  installed_at: number
+  launched_at: number
+}
+
+export interface GameDetail {
+  id: number
+  source_id: string
+  name_en: string
+  name_local: string
+  display_name: string
+  cover_url: string
+  source_url: string
+  options_num: number
+  updated_at: number
+}
+
+export interface TrainerDetailResponse {
+  game: GameDetail
+  trainers: TrainerDetail[]
 }
 
 export const useTrainerStore = defineStore('trainer', () => {
-  const trainers = ref<TrainerItem[]>([])
+  const trainers = ref<GameEntry[]>([])
   const loading = ref(false)
   const searchQuery = ref('')
   const currentPage = ref(1)
@@ -38,7 +96,7 @@ export const useTrainerStore = defineStore('trainer', () => {
     loading.value = true
     try {
       const result = await AppService.GetTrainers(page, pageSize.value)
-      trainers.value = (result || []) as TrainerItem[]
+      trainers.value = (result || []) as unknown as GameEntry[]
       currentPage.value = page
       totalCount.value = trainers.value.length
     } catch (e) {
@@ -57,7 +115,7 @@ export const useTrainerStore = defineStore('trainer', () => {
     searchQuery.value = query
     try {
       const result = await AppService.SearchTrainers(query)
-      trainers.value = (result || []) as TrainerItem[]
+      trainers.value = (result || []) as unknown as GameEntry[]
       currentPage.value = 1
       totalCount.value = trainers.value.length
     } catch (e) {
