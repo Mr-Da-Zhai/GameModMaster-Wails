@@ -1,10 +1,13 @@
 <script setup lang="ts">
+import { darkTheme } from 'naive-ui'
+import { NConfigProvider } from 'naive-ui'
+import MainLayout from './components/MainLayout.vue'
 </script>
 
 <template>
-  <div id="app">
-    <h1>GameModMaster</h1>
-  </div>
+  <NConfigProvider :theme="darkTheme">
+    <MainLayout />
+  </NConfigProvider>
 </template>
 
 <style>
@@ -23,8 +26,5 @@ body {
 #app {
   width: 100vw;
   height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 </style>
