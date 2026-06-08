@@ -1,0 +1,2056 @@
+[
+  {
+    "name_en": "A Plague Tale: Innocence",
+    "name_zh": "瘟疫传说：无罪",
+    "aliases": [
+      "瘟疫传说无罪",
+      "无罪"
+    ]
+  },
+  {
+    "name_en": "A Plague Tale: Requiem",
+    "name_zh": "瘟疫传说：安魂曲",
+    "aliases": [
+      "瘟疫传说安魂曲",
+      "安魂曲"
+    ]
+  },
+  {
+    "name_en": "Alan Wake 2",
+    "name_zh": "心灵杀手2",
+    "aliases": [
+      "心灵杀手2",
+      "Alan Wake 2"
+    ]
+  },
+  {
+    "name_en": "Alan Wake Remastered",
+    "name_zh": "心灵杀手重制版",
+    "aliases": [
+      "心灵杀手重制版",
+      "Alan Wake Remastered"
+    ]
+  },
+  {
+    "name_en": "Anthem",
+    "name_zh": "圣歌",
+    "aliases": [
+      "圣歌",
+      "Anthem"
+    ]
+  },
+  {
+    "name_en": "Apex Legends",
+    "name_zh": "Apex英雄",
+    "aliases": [
+      "Apex英雄",
+      "APEX",
+      "派派"
+    ]
+  },
+  {
+    "name_en": "Armored Core VI: Fires of Rubicon",
+    "name_zh": "装甲核心6：境界天火",
+    "aliases": [
+      "装甲核心6",
+      "境界天火",
+      "AC6"
+    ]
+  },
+  {
+    "name_en": "Assassin's Creed Mirage",
+    "name_zh": "刺客信条：幻景",
+    "aliases": [
+      "刺客信条幻景",
+      "幻景",
+      "ACM"
+    ]
+  },
+  {
+    "name_en": "Assassin's Creed Odyssey",
+    "name_zh": "刺客信条：奥德赛",
+    "aliases": [
+      "刺客信条奥德赛",
+      "奥德赛",
+      "ACO"
+    ]
+  },
+  {
+    "name_en": "Assassin's Creed Origins",
+    "name_zh": "刺客信条：起源",
+    "aliases": [
+      "刺客信条起源",
+      "起源",
+      "ACO"
+    ]
+  },
+  {
+    "name_en": "Assassin's Creed Valhalla",
+    "name_zh": "刺客信条：英灵殿",
+    "aliases": [
+      "刺客信条英灵殿",
+      "英灵殿",
+      "ACV"
+    ]
+  },
+  {
+    "name_en": "Astral Chain",
+    "name_zh": "异界锁链",
+    "aliases": [
+      "异界锁链",
+      "Astral Chain"
+    ]
+  },
+  {
+    "name_en": "Avowed",
+    "name_zh": "宣誓",
+    "aliases": [
+      "宣誓",
+      "Avowed"
+    ]
+  },
+  {
+    "name_en": "Baldur's Gate 3",
+    "name_zh": "博德之门3",
+    "aliases": [
+      "博德之门",
+      "BG3",
+      "博德3"
+    ]
+  },
+  {
+    "name_en": "Banishers: Ghosts of New Eden",
+    "name_zh": "放逐者：新伊甸园的幽灵",
+    "aliases": [
+      "放逐者",
+      "新伊甸园幽灵"
+    ]
+  },
+  {
+    "name_en": "Battlefield 1",
+    "name_zh": "战地1",
+    "aliases": [
+      "战地1",
+      "BF1"
+    ]
+  },
+  {
+    "name_en": "Battlefield 2042",
+    "name_zh": "战地2042",
+    "aliases": [
+      "战地2042",
+      "BF2042",
+      "BF4"
+    ]
+  },
+  {
+    "name_en": "Battlefield V",
+    "name_zh": "战地5",
+    "aliases": [
+      "战地5",
+      "BF5",
+      "BFV"
+    ]
+  },
+  {
+    "name_en": "Bayonetta",
+    "name_zh": "猎天使魔女",
+    "aliases": [
+      "猎天使魔女",
+      "Bayonetta",
+      "贝优妮塔"
+    ]
+  },
+  {
+    "name_en": "Bayonetta 2",
+    "name_zh": "猎天使魔女2",
+    "aliases": [
+      "猎天使魔女2",
+      "Bayonetta 2",
+      "贝优妮塔2"
+    ]
+  },
+  {
+    "name_en": "Bayonetta 3",
+    "name_zh": "猎天使魔女3",
+    "aliases": [
+      "猎天使魔女3",
+      "Bayonetta 3",
+      "贝优妮塔3"
+    ]
+  },
+  {
+    "name_en": "Black Myth: Wukong",
+    "name_zh": "黑神话：悟空",
+    "aliases": [
+      "黑神话悟空",
+      "悟空",
+      "Wukong",
+      "Black Myth"
+    ]
+  },
+  {
+    "name_en": "Bloodborne",
+    "name_zh": "血源诅咒",
+    "aliases": [
+      "血源诅咒",
+      "血源",
+      "Bloodborne"
+    ]
+  },
+  {
+    "name_en": "Borderlands 2",
+    "name_zh": "无主之地2",
+    "aliases": [
+      "无主之地2",
+      "BL2",
+      "边境之地2"
+    ]
+  },
+  {
+    "name_en": "Borderlands 3",
+    "name_zh": "无主之地3",
+    "aliases": [
+      "无主之地3",
+      "BL3",
+      "边境之地3"
+    ]
+  },
+  {
+    "name_en": "Brotato",
+    "name_zh": "土豆兄弟",
+    "aliases": [
+      "土豆兄弟",
+      "Brotato"
+    ]
+  },
+  {
+    "name_en": "Call of Duty: Black Ops Cold War",
+    "name_zh": "使命召唤：黑色行动冷战",
+    "aliases": [
+      "使命召唤17",
+      "COD17",
+      "BOCW"
+    ]
+  },
+  {
+    "name_en": "Call of Duty: Modern Warfare II",
+    "name_zh": "使命召唤：现代战争2",
+    "aliases": [
+      "使命召唤19",
+      "COD19",
+      "MW2"
+    ]
+  },
+  {
+    "name_en": "Call of Duty: Modern Warfare III",
+    "name_zh": "使命召唤：现代战争3",
+    "aliases": [
+      "使命召唤20",
+      "COD20",
+      "MW3"
+    ]
+  },
+  {
+    "name_en": "Call of Duty: Vanguard",
+    "name_zh": "使命召唤：先锋",
+    "aliases": [
+      "使命召唤18",
+      "COD18",
+      "先锋"
+    ]
+  },
+  {
+    "name_en": "Celeste",
+    "name_zh": "蔚蓝",
+    "aliases": [
+      "蔚蓝",
+      "Celeste"
+    ]
+  },
+  {
+    "name_en": "Clockwork Revolution",
+    "name_zh": "发条革命",
+    "aliases": [
+      "发条革命",
+      "Clockwork Revolution"
+    ]
+  },
+  {
+    "name_en": "Code Vein",
+    "name_zh": "噬血代码",
+    "aliases": [
+      "噬血代码",
+      "Code Vein"
+    ]
+  },
+  {
+    "name_en": "Control",
+    "name_zh": "控制",
+    "aliases": [
+      "控制",
+      "Control"
+    ]
+  },
+  {
+    "name_en": "Crisis Core: Final Fantasy VII Reunion",
+    "name_zh": "核心危机：最终幻想7重聚",
+    "aliases": [
+      "核心危机重聚",
+      "CCFF7",
+      "Crisis Core"
+    ]
+  },
+  {
+    "name_en": "Cuphead",
+    "name_zh": "茶杯头",
+    "aliases": [
+      "茶杯头",
+      "Cuphead",
+      "杯头"
+    ]
+  },
+  {
+    "name_en": "Cyberpunk 2077",
+    "name_zh": "赛博朋克2077",
+    "aliases": [
+      "赛博朋克",
+      "2077",
+      "CP2077"
+    ]
+  },
+  {
+    "name_en": "Cyberpunk 2077: Phantom Liberty",
+    "name_zh": "赛博朋克2077：自由幻影",
+    "aliases": [
+      "自由幻影",
+      "Phantom Liberty"
+    ]
+  },
+  {
+    "name_en": "Dark Souls II: Scholar of the First Sin",
+    "name_zh": "黑暗之魂2：原罪学者",
+    "aliases": [
+      "黑魂2",
+      "DS2"
+    ]
+  },
+  {
+    "name_en": "Dark Souls III",
+    "name_zh": "黑暗之魂3",
+    "aliases": [
+      "黑魂3",
+      "Dark Souls 3",
+      "DS3"
+    ]
+  },
+  {
+    "name_en": "Dark Souls Remastered",
+    "name_zh": "黑暗之魂重制版",
+    "aliases": [
+      "黑魂重制版",
+      "DSR"
+    ]
+  },
+  {
+    "name_en": "Darkest Dungeon",
+    "name_zh": "暗黑地牢",
+    "aliases": [
+      "暗黑地牢",
+      "Darkest Dungeon"
+    ]
+  },
+  {
+    "name_en": "Dauntless",
+    "name_zh": "无畏",
+    "aliases": [
+      "无畏",
+      "Dauntless",
+      "共斗游戏"
+    ]
+  },
+  {
+    "name_en": "Days Gone",
+    "name_zh": "往日不再",
+    "aliases": [
+      "往日不再",
+      "Days Gone"
+    ]
+  },
+  {
+    "name_en": "Dead Cells",
+    "name_zh": "死亡细胞",
+    "aliases": [
+      "死亡细胞",
+      "Dead Cells"
+    ]
+  },
+  {
+    "name_en": "Dead Rising 4",
+    "name_zh": "丧尸围城4",
+    "aliases": [
+      "丧尸围城4",
+      "DR4"
+    ]
+  },
+  {
+    "name_en": "Death Stranding",
+    "name_zh": "死亡搁浅",
+    "aliases": [
+      "死亡搁浅",
+      "Death Stranding"
+    ]
+  },
+  {
+    "name_en": "Death Stranding Director's Cut",
+    "name_zh": "死亡搁浅导演剪辑版",
+    "aliases": [
+      "死亡搁浅导演版",
+      "导演剪辑版"
+    ]
+  },
+  {
+    "name_en": "Deep Rock Galactic",
+    "name_zh": "深岩银河",
+    "aliases": [
+      "深岩银河",
+      "Deep Rock Galactic",
+      "DRG"
+    ]
+  },
+  {
+    "name_en": "Demon's Souls",
+    "name_zh": "恶魔之魂",
+    "aliases": [
+      "恶魔之魂",
+      "Demon's Souls"
+    ]
+  },
+  {
+    "name_en": "Destiny 2",
+    "name_zh": "命运2",
+    "aliases": [
+      "命运2",
+      "Destiny2",
+      "天命2"
+    ]
+  },
+  {
+    "name_en": "Devil May Cry 5",
+    "name_zh": "鬼泣5",
+    "aliases": [
+      "鬼泣5",
+      "DMC5",
+      "Devil May Cry 5"
+    ]
+  },
+  {
+    "name_en": "Diablo III",
+    "name_zh": "暗黑破坏神3",
+    "aliases": [
+      "暗黑3",
+      "Diablo 3",
+      "D3"
+    ]
+  },
+  {
+    "name_en": "Diablo IV",
+    "name_zh": "暗黑破坏神4",
+    "aliases": [
+      "暗黑4",
+      "Diablo 4",
+      "D4"
+    ]
+  },
+  {
+    "name_en": "Disco Elysium",
+    "name_zh": "极乐迪斯科",
+    "aliases": [
+      "极乐迪斯科",
+      "Disco Elysium"
+    ]
+  },
+  {
+    "name_en": "Disco Elysium: The Final Cut",
+    "name_zh": "极乐迪斯科：最终剪辑版",
+    "aliases": [
+      "极乐迪斯科最终版",
+      "Disco Elysium Final Cut"
+    ]
+  },
+  {
+    "name_en": "Divinity: Original Sin 2",
+    "name_zh": "神界：原罪2",
+    "aliases": [
+      "神界原罪2",
+      "Divinity OS2",
+      "DOS2"
+    ]
+  },
+  {
+    "name_en": "DOOM Eternal",
+    "name_zh": "毁灭战士：永恒",
+    "aliases": [
+      "毁灭战士永恒",
+      "DOOM永恒",
+      "永恒"
+    ]
+  },
+  {
+    "name_en": "Dragon Age: Inquisition",
+    "name_zh": "龙腾世纪：审判",
+    "aliases": [
+      "龙腾世纪审判",
+      "DAI"
+    ]
+  },
+  {
+    "name_en": "Dragon Quest Builders 2",
+    "name_zh": "勇者斗恶龙：建造者2",
+    "aliases": [
+      "勇者斗恶龙建造者2",
+      "DQB2",
+      "DQ建造者2"
+    ]
+  },
+  {
+    "name_en": "Dragon Quest XI S: Echoes of an Elusive Age",
+    "name_zh": "勇者斗恶龙11S",
+    "aliases": [
+      "勇者斗恶龙11",
+      "DQ11",
+      "Dragon Quest 11"
+    ]
+  },
+  {
+    "name_en": "Dragon's Dogma 2",
+    "name_zh": "龙之信条2",
+    "aliases": [
+      "龙之信条2",
+      "DD2"
+    ]
+  },
+  {
+    "name_en": "Drakengard 3",
+    "name_zh": "龙背上的骑兵3",
+    "aliases": [
+      "龙背上的骑兵3",
+      "Drakengard 3"
+    ]
+  },
+  {
+    "name_en": "Dying Light",
+    "name_zh": "消逝的光芒",
+    "aliases": [
+      "消逝的光芒",
+      "DL",
+      "Dying Light"
+    ]
+  },
+  {
+    "name_en": "Dying Light 2",
+    "name_zh": "消逝的光芒2",
+    "aliases": [
+      "消逝的光芒2",
+      "DL2",
+      " dying light 2"
+    ]
+  },
+  {
+    "name_en": "EA Sports FC 24",
+    "name_zh": "EA Sports FC 24",
+    "aliases": [
+      "FC24",
+      "FIFA24"
+    ]
+  },
+  {
+    "name_en": "EA Sports FC 25",
+    "name_zh": "EA Sports FC 25",
+    "aliases": [
+      "FC25",
+      "FIFA25"
+    ]
+  },
+  {
+    "name_en": "Elden Ring",
+    "name_zh": "艾尔登法环",
+    "aliases": [
+      "老头环",
+      "艾尔登",
+      "法环"
+    ]
+  },
+  {
+    "name_en": "Elden Ring: Shadow of the Erdtree",
+    "name_zh": "艾尔登法环：黄金树之影",
+    "aliases": [
+      "黄金树之影",
+      "艾尔登法环DLC",
+      "Shadow of the Erdtree"
+    ]
+  },
+  {
+    "name_en": "Elite Dangerous",
+    "name_zh": "精英：危机",
+    "aliases": [
+      "精英危机",
+      "Elite Dangerous"
+    ]
+  },
+  {
+    "name_en": "Enshrouded",
+    "name_zh": "雾锁王国",
+    "aliases": [
+      "雾锁王国",
+      "Enshrouded"
+    ]
+  },
+  {
+    "name_en": "F1 23",
+    "name_zh": "F1 23",
+    "aliases": [
+      "F123",
+      "一级方程式23"
+    ]
+  },
+  {
+    "name_en": "F1 24",
+    "name_zh": "F1 24",
+    "aliases": [
+      "F124",
+      "一级方程式24"
+    ]
+  },
+  {
+    "name_en": "Fable",
+    "name_zh": "神鬼寓言",
+    "aliases": [
+      "神鬼寓言",
+      "Fable",
+      "寓言"
+    ]
+  },
+  {
+    "name_en": "Fallout 4",
+    "name_zh": "辐射4",
+    "aliases": [
+      "辐射4",
+      "Fallout 4",
+      "FO4"
+    ]
+  },
+  {
+    "name_en": "Fallout: New Vegas",
+    "name_zh": "辐射：新维加斯",
+    "aliases": [
+      "辐射新维加斯",
+      "新维加斯",
+      "FNV"
+    ]
+  },
+  {
+    "name_en": "Far Cry 5",
+    "name_zh": "孤岛惊魂5",
+    "aliases": [
+      "孤岛惊魂5",
+      "FC5",
+      "远哭5"
+    ]
+  },
+  {
+    "name_en": "Far Cry 6",
+    "name_zh": "孤岛惊魂6",
+    "aliases": [
+      "孤岛惊魂6",
+      "FC6",
+      "远哭6"
+    ]
+  },
+  {
+    "name_en": "FIFA 23",
+    "name_zh": "FIFA 23",
+    "aliases": [
+      "FIFA23",
+      "国际足联23"
+    ]
+  },
+  {
+    "name_en": "Final Fantasy Origin: Stranger of Paradise",
+    "name_zh": "最终幻想起源：天堂的陌生人",
+    "aliases": [
+      "天堂的陌生人",
+      "FF起源",
+      "Stranger of Paradise"
+    ]
+  },
+  {
+    "name_en": "Final Fantasy VII Rebirth",
+    "name_zh": "最终幻想7重生",
+    "aliases": [
+      "最终幻想7重生",
+      "FF7重生",
+      "FFVII Rebirth"
+    ]
+  },
+  {
+    "name_en": "Final Fantasy VII Remake",
+    "name_zh": "最终幻想7重制版",
+    "aliases": [
+      "最终幻想7重制版",
+      "FF7R",
+      "FF7重制版"
+    ]
+  },
+  {
+    "name_en": "Final Fantasy VII Remake Intergrade",
+    "name_zh": "最终幻想7重制版Intergrade",
+    "aliases": [
+      "FF7RI",
+      "FF7R Intergrade",
+      "尤菲DLC"
+    ]
+  },
+  {
+    "name_en": "Final Fantasy XIV Online",
+    "name_zh": "最终幻想14",
+    "aliases": [
+      "最终幻想14",
+      "FF14",
+      "FFXIV"
+    ]
+  },
+  {
+    "name_en": "Final Fantasy XV",
+    "name_zh": "最终幻想15",
+    "aliases": [
+      "最终幻想15",
+      "FF15",
+      "FFXV"
+    ]
+  },
+  {
+    "name_en": "Final Fantasy XVI",
+    "name_zh": "最终幻想16",
+    "aliases": [
+      "最终幻想16",
+      "FF16",
+      "FFXVI"
+    ]
+  },
+  {
+    "name_en": "Fire Emblem Engage",
+    "name_zh": "火焰纹章：结合",
+    "aliases": [
+      "火焰纹章结合",
+      "Engage",
+      "FE Engage"
+    ]
+  },
+  {
+    "name_en": "Fire Emblem: Three Houses",
+    "name_zh": "火焰纹章：风花雪月",
+    "aliases": [
+      "火焰纹章风花雪月",
+      "风花雪月",
+      "FE Three Houses"
+    ]
+  },
+  {
+    "name_en": "Foamstars",
+    "name_zh": "泡沫之星",
+    "aliases": [
+      "泡沫之星",
+      "Foamstars"
+    ]
+  },
+  {
+    "name_en": "Forza Horizon 4",
+    "name_zh": "极限竞速：地平线4",
+    "aliases": [
+      "地平线4",
+      "FH4",
+      "极限竞速4"
+    ]
+  },
+  {
+    "name_en": "Forza Horizon 5",
+    "name_zh": "极限竞速：地平线5",
+    "aliases": [
+      "地平线5",
+      "FH5",
+      "极限竞速5"
+    ]
+  },
+  {
+    "name_en": "Forza Motorsport",
+    "name_zh": "极限竞速",
+    "aliases": [
+      "极限竞速",
+      "FM",
+      "Forza"
+    ]
+  },
+  {
+    "name_en": "Ghost of Tsushima",
+    "name_zh": "对马岛之魂",
+    "aliases": [
+      "对马岛之魂",
+      "对马岛",
+      "Tsushima"
+    ]
+  },
+  {
+    "name_en": "God Eater 3",
+    "name_zh": "噬神者3",
+    "aliases": [
+      "噬神者3",
+      "God Eater 3",
+      "GE3"
+    ]
+  },
+  {
+    "name_en": "God of War",
+    "name_zh": "战神",
+    "aliases": [
+      "战神",
+      "奎托斯",
+      "God of War"
+    ]
+  },
+  {
+    "name_en": "God of War Ragnarök",
+    "name_zh": "战神：诸神黄昏",
+    "aliases": [
+      "战神诸神黄昏",
+      "诸神黄昏",
+      "Ragnarök"
+    ]
+  },
+  {
+    "name_en": "Gran Turismo 7",
+    "name_zh": "跑车浪漫旅7",
+    "aliases": [
+      "跑车浪漫旅7",
+      "GT7",
+      "Gran Turismo 7"
+    ]
+  },
+  {
+    "name_en": "Granblue Fantasy: Relink",
+    "name_zh": "碧蓝幻想：Relink",
+    "aliases": [
+      "碧蓝幻想Relink",
+      "GBF Relink"
+    ]
+  },
+  {
+    "name_en": "Grand Theft Auto V",
+    "name_zh": "侠盗猎车手5",
+    "aliases": [
+      "GTA5",
+      "GTA V",
+      "GTA5",
+      "侠盗猎车手V",
+      "侠盗飞车5"
+    ]
+  },
+  {
+    "name_en": "Grand Theft Auto VI",
+    "name_zh": "侠盗猎车手6",
+    "aliases": [
+      "GTA6",
+      "GTA VI",
+      "侠盗猎车手VI",
+      "侠盗飞车6"
+    ]
+  },
+  {
+    "name_en": "Green Hell",
+    "name_zh": "绿色地狱",
+    "aliases": [
+      "绿色地狱",
+      "Green Hell"
+    ]
+  },
+  {
+    "name_en": "Gunfire Reborn",
+    "name_zh": "枪火重生",
+    "aliases": [
+      "枪火重生",
+      "Gunfire Reborn"
+    ]
+  },
+  {
+    "name_en": "Hades",
+    "name_zh": "哈迪斯",
+    "aliases": [
+      "哈迪斯",
+      "Hades"
+    ]
+  },
+  {
+    "name_en": "Hades II",
+    "name_zh": "哈迪斯2",
+    "aliases": [
+      "哈迪斯2",
+      "Hades 2"
+    ]
+  },
+  {
+    "name_en": "Helldivers 2",
+    "name_zh": "绝地潜兵2",
+    "aliases": [
+      "绝地潜兵2",
+      "地狱潜者2",
+      "Helldivers 2"
+    ]
+  },
+  {
+    "name_en": "Hogwarts Legacy",
+    "name_zh": "霍格沃茨之遗",
+    "aliases": [
+      "霍格沃茨",
+      "哈利波特游戏"
+    ]
+  },
+  {
+    "name_en": "Hollow Knight",
+    "name_zh": "空洞骑士",
+    "aliases": [
+      "空洞骑士",
+      "Hollow Knight"
+    ]
+  },
+  {
+    "name_en": "Hollow Knight: Silksong",
+    "name_zh": "空洞骑士：丝之歌",
+    "aliases": [
+      "空洞骑士丝之歌",
+      "丝之歌",
+      "Silksong"
+    ]
+  },
+  {
+    "name_en": "Horizon Forbidden West",
+    "name_zh": "地平线：西之绝境",
+    "aliases": [
+      "地平线西之绝境",
+      "西之绝境"
+    ]
+  },
+  {
+    "name_en": "Horizon Zero Dawn",
+    "name_zh": "地平线：零之曙光",
+    "aliases": [
+      "地平线零之曙光",
+      "零之曙光"
+    ]
+  },
+  {
+    "name_en": "Hot Wheels Unleashed",
+    "name_zh": "风火轮：释放",
+    "aliases": [
+      "风火轮释放",
+      "Hot Wheels"
+    ]
+  },
+  {
+    "name_en": "Indiana Jones and the Great Circle",
+    "name_zh": "印第安纳琼斯：大圆",
+    "aliases": [
+      "印第安纳琼斯",
+      "大圆"
+    ]
+  },
+  {
+    "name_en": "Inscryption",
+    "name_zh": "邪恶冥刻",
+    "aliases": [
+      "邪恶冥刻",
+      "Inscryption"
+    ]
+  },
+  {
+    "name_en": "It Takes Two",
+    "name_zh": "双人成行",
+    "aliases": [
+      "双人成行",
+      "It Takes Two"
+    ]
+  },
+  {
+    "name_en": "Kena: Bridge of Spirits",
+    "name_zh": "柯娜：精神之桥",
+    "aliases": [
+      "柯娜",
+      "精神之桥",
+      "Kena"
+    ]
+  },
+  {
+    "name_en": "Kingdom Hearts III",
+    "name_zh": "王国之心3",
+    "aliases": [
+      "王国之心3",
+      "KH3"
+    ]
+  },
+  {
+    "name_en": "Lies of P",
+    "name_zh": "匹诺曹的谎言",
+    "aliases": [
+      "匹诺曹",
+      "谎言",
+      "Lies of P"
+    ]
+  },
+  {
+    "name_en": "Like a Dragon: Infinite Wealth",
+    "name_zh": "如龙8",
+    "aliases": [
+      "如龙8",
+      "无限财富",
+      "LAD8",
+      "Yakuza 8"
+    ]
+  },
+  {
+    "name_en": "Loop Hero",
+    "name_zh": "循环英雄",
+    "aliases": [
+      "循环英雄",
+      "Loop Hero"
+    ]
+  },
+  {
+    "name_en": "Madden NFL 24",
+    "name_zh": "麦登橄榄球24",
+    "aliases": [
+      "Madden24",
+      "橄榄球24"
+    ]
+  },
+  {
+    "name_en": "Madden NFL 25",
+    "name_zh": "麦登橄榄球25",
+    "aliases": [
+      "Madden25",
+      "橄榄球25"
+    ]
+  },
+  {
+    "name_en": "Marvel's Avengers",
+    "name_zh": "漫威复仇者联盟",
+    "aliases": [
+      "漫威复仇者",
+      "复仇者联盟游戏"
+    ]
+  },
+  {
+    "name_en": "Marvel's Spider-Man 2",
+    "name_zh": "漫威蜘蛛侠2",
+    "aliases": [
+      "蜘蛛侠2",
+      "漫威蜘蛛侠2",
+      "Spider-Man 2"
+    ]
+  },
+  {
+    "name_en": "Marvel's Spider-Man: Miles Morales",
+    "name_zh": "漫威蜘蛛侠：迈尔斯·莫拉莱斯",
+    "aliases": [
+      "蜘蛛侠迈尔斯",
+      "迈尔斯",
+      "Miles Morales"
+    ]
+  },
+  {
+    "name_en": "Mass Effect Legendary Edition",
+    "name_zh": "质量效应：传奇版",
+    "aliases": [
+      "质量效应传奇版",
+      "MELE"
+    ]
+  },
+  {
+    "name_en": "Max Payne 3",
+    "name_zh": "马克思·佩恩3",
+    "aliases": [
+      "马克思佩恩3",
+      "Max Payne 3",
+      "MP3"
+    ]
+  },
+  {
+    "name_en": "Metal Gear Solid V: The Phantom Pain",
+    "name_zh": "合金装备5：幻痛",
+    "aliases": [
+      "合金装备5",
+      "幻痛",
+      "MGS5",
+      "MGSV"
+    ]
+  },
+  {
+    "name_en": "Metal Gear Solid Δ: Snake Eater",
+    "name_zh": "合金装备Δ：食蛇者",
+    "aliases": [
+      "合金装备3重制版",
+      "食蛇者",
+      "MGS3"
+    ]
+  },
+  {
+    "name_en": "Metaphor: ReFantazio",
+    "name_zh": "暗喻幻想：ReFantazio",
+    "aliases": [
+      "暗喻幻想",
+      "ReFantazio",
+      "隐喻"
+    ]
+  },
+  {
+    "name_en": "MLB The Show 24",
+    "name_zh": "MLB The Show 24",
+    "aliases": [
+      "MLB The Show 24",
+      "棒球24"
+    ]
+  },
+  {
+    "name_en": "Monster Hunter Rise",
+    "name_zh": "怪物猎人：崛起",
+    "aliases": [
+      "怪物猎人崛起",
+      "怪猎崛起",
+      "MHR"
+    ]
+  },
+  {
+    "name_en": "Monster Hunter Stories 2: Wings of Ruin",
+    "name_zh": "怪物猎人物语2",
+    "aliases": [
+      "怪物猎人物语2",
+      "MHS2",
+      "物语2"
+    ]
+  },
+  {
+    "name_en": "Monster Hunter: World",
+    "name_zh": "怪物猎人：世界",
+    "aliases": [
+      "怪物猎人世界",
+      "怪猎世界",
+      "MHW"
+    ]
+  },
+  {
+    "name_en": "Monster Train",
+    "name_zh": "怪物火车",
+    "aliases": [
+      "怪物火车",
+      "Monster Train"
+    ]
+  },
+  {
+    "name_en": "Mortal Kombat 1",
+    "name_zh": "真人快打1",
+    "aliases": [
+      "真人快打1",
+      "MK1"
+    ]
+  },
+  {
+    "name_en": "NBA 2K24",
+    "name_zh": "NBA 2K24",
+    "aliases": [
+      "NBA2K24",
+      "2K24"
+    ]
+  },
+  {
+    "name_en": "NBA 2K25",
+    "name_zh": "NBA 2K25",
+    "aliases": [
+      "NBA2K25",
+      "2K25"
+    ]
+  },
+  {
+    "name_en": "Need for Speed Heat",
+    "name_zh": "极品飞车：热度",
+    "aliases": [
+      "极品飞车热度",
+      "热度",
+      "NFS Heat"
+    ]
+  },
+  {
+    "name_en": "Need for Speed Unbound",
+    "name_zh": "极品飞车：不羁",
+    "aliases": [
+      "极品飞车不羁",
+      "不羁",
+      "NFS Unbound"
+    ]
+  },
+  {
+    "name_en": "Need for Speed: Most Wanted",
+    "name_zh": "极品飞车：最高通缉",
+    "aliases": [
+      "极品飞车最高通缉",
+      "最高通缉",
+      "NFS MW"
+    ]
+  },
+  {
+    "name_en": "Need for Speed: Payback",
+    "name_zh": "极品飞车：复仇",
+    "aliases": [
+      "极品飞车复仇",
+      "复仇",
+      "NFS Payback"
+    ]
+  },
+  {
+    "name_en": "NieR Replicant ver.1.22474487139...",
+    "name_zh": "尼尔：人工生命",
+    "aliases": [
+      "尼尔人工生命",
+      "NieR Replicant",
+      "尼尔1"
+    ]
+  },
+  {
+    "name_en": "Nier: Automata",
+    "name_zh": "尼尔：机械纪元",
+    "aliases": [
+      "尼尔机械纪元",
+      "尼尔",
+      "Nier"
+    ]
+  },
+  {
+    "name_en": "Nioh 2",
+    "name_zh": "仁王2",
+    "aliases": [
+      "仁王2",
+      "Nioh 2"
+    ]
+  },
+  {
+    "name_en": "No Man's Sky",
+    "name_zh": "无人深空",
+    "aliases": [
+      "无人深空",
+      "No Man's Sky"
+    ]
+  },
+  {
+    "name_en": "Ori and the Blind Forest",
+    "name_zh": "精灵与森林",
+    "aliases": [
+      "精灵与森林",
+      "Ori 1",
+      "奥日1"
+    ]
+  },
+  {
+    "name_en": "Ori and the Will of the Wisps",
+    "name_zh": "精灵与萤火意志",
+    "aliases": [
+      "精灵与萤火意志",
+      "Ori 2",
+      "奥日2"
+    ]
+  },
+  {
+    "name_en": "Outriders",
+    "name_zh": "先驱者",
+    "aliases": [
+      "先驱者",
+      "Outriders"
+    ]
+  },
+  {
+    "name_en": "Overwatch 2",
+    "name_zh": "守望先锋2",
+    "aliases": [
+      "守望先锋2",
+      "OW2",
+      "守望2"
+    ]
+  },
+  {
+    "name_en": "Pacific Drive",
+    "name_zh": "太平洋驾驶",
+    "aliases": [
+      "太平洋驾驶",
+      "Pacific Drive"
+    ]
+  },
+  {
+    "name_en": "Palworld",
+    "name_zh": "幻兽帕鲁",
+    "aliases": [
+      "幻兽帕鲁",
+      "帕鲁",
+      "Palworld",
+      "Pocketpair"
+    ]
+  },
+  {
+    "name_en": "Perfect Dark",
+    "name_zh": "完美黑暗",
+    "aliases": [
+      "完美黑暗",
+      "Perfect Dark"
+    ]
+  },
+  {
+    "name_en": "Persona 3 Reload",
+    "name_zh": "女神异闻录3重制版",
+    "aliases": [
+      "P3R",
+      "女神异闻录3R",
+      "P3重制版"
+    ]
+  },
+  {
+    "name_en": "Persona 4 Golden",
+    "name_zh": "女神异闻录4黄金版",
+    "aliases": [
+      "P4G",
+      "女神异闻录4G",
+      "P4黄金版"
+    ]
+  },
+  {
+    "name_en": "Persona 5 Royal",
+    "name_zh": "女神异闻录5皇家版",
+    "aliases": [
+      "P5R",
+      "女神异闻录5R",
+      "P5皇家版"
+    ]
+  },
+  {
+    "name_en": "Persona 5 Strikers",
+    "name_zh": "女神异闻录5：乱战",
+    "aliases": [
+      "P5S",
+      "女神异闻录5乱战",
+      "P5乱战"
+    ]
+  },
+  {
+    "name_en": "Pillars of Eternity II: Deadfire",
+    "name_zh": "永恒之柱2：死火",
+    "aliases": [
+      "永恒之柱2",
+      "死火",
+      "PoE2"
+    ]
+  },
+  {
+    "name_en": "Prince of Persia: The Lost Crown",
+    "name_zh": "波斯王子：失落的王冠",
+    "aliases": [
+      "波斯王子失落的王冠",
+      "失落的王冠",
+      "PoP"
+    ]
+  },
+  {
+    "name_en": "Quantum Break",
+    "name_zh": "量子破碎",
+    "aliases": [
+      "量子破碎",
+      "Quantum Break"
+    ]
+  },
+  {
+    "name_en": "Raft",
+    "name_zh": "木筏求生",
+    "aliases": [
+      "木筏求生",
+      "Raft"
+    ]
+  },
+  {
+    "name_en": "Red Dead Redemption 2",
+    "name_zh": "荒野大镖客2",
+    "aliases": [
+      "大镖客2",
+      "RDR2",
+      "荒野大镖客救赎2"
+    ]
+  },
+  {
+    "name_en": "Remnant II",
+    "name_zh": "遗迹2",
+    "aliases": [
+      "遗迹2",
+      "Remnant 2"
+    ]
+  },
+  {
+    "name_en": "Remnant: From the Ashes",
+    "name_zh": "遗迹：灰烬重生",
+    "aliases": [
+      "遗迹灰烬重生",
+      "Remnant"
+    ]
+  },
+  {
+    "name_en": "Resident Evil 2 Remake",
+    "name_zh": "生化危机2重制版",
+    "aliases": [
+      "生化2重制版",
+      "RE2R",
+      "生化危机2"
+    ]
+  },
+  {
+    "name_en": "Resident Evil 3 Remake",
+    "name_zh": "生化危机3重制版",
+    "aliases": [
+      "生化3重制版",
+      "RE3R",
+      "生化危机3"
+    ]
+  },
+  {
+    "name_en": "Resident Evil 4 Remake",
+    "name_zh": "生化危机4重制版",
+    "aliases": [
+      "生化4重制版",
+      "RE4R",
+      "生化危机4"
+    ]
+  },
+  {
+    "name_en": "Resident Evil Village",
+    "name_zh": "生化危机8：村庄",
+    "aliases": [
+      "生化危机8",
+      "生化危机村庄",
+      "RE8"
+    ]
+  },
+  {
+    "name_en": "Returnal",
+    "name_zh": "死亡回归",
+    "aliases": [
+      "死亡回归",
+      "Returnal"
+    ]
+  },
+  {
+    "name_en": "Riders Republic",
+    "name_zh": "极限共和国",
+    "aliases": [
+      "极限共和国",
+      "Riders Republic"
+    ]
+  },
+  {
+    "name_en": "Rise of the Ronin",
+    "name_zh": "浪人崛起",
+    "aliases": [
+      "浪人崛起",
+      "Rise of Ronin"
+    ]
+  },
+  {
+    "name_en": "Rise of the Tomb Raider",
+    "name_zh": "古墓丽影：崛起",
+    "aliases": [
+      "古墓丽影崛起",
+      "崛起",
+      "ROTTR"
+    ]
+  },
+  {
+    "name_en": "Risk of Rain 2",
+    "name_zh": "雨中冒险2",
+    "aliases": [
+      "雨中冒险2",
+      "Risk of Rain 2",
+      "RoR2"
+    ]
+  },
+  {
+    "name_en": "S.T.A.L.K.E.R. 2: Heart of Chornobyl",
+    "name_zh": "潜行者2：切尔诺贝利之心",
+    "aliases": [
+      "潜行者2",
+      "切尔诺贝利之心",
+      "STALKER 2"
+    ]
+  },
+  {
+    "name_en": "Scarlet Nexus",
+    "name_zh": "绯红结系",
+    "aliases": [
+      "绯红结系",
+      "Scarlet Nexus"
+    ]
+  },
+  {
+    "name_en": "Sea of Thieves",
+    "name_zh": "盗贼之海",
+    "aliases": [
+      "盗贼之海",
+      "Sea of Thieves"
+    ]
+  },
+  {
+    "name_en": "Sekiro: Shadows Die Twice",
+    "name_zh": "只狼：影逝二度",
+    "aliases": [
+      "只狼",
+      "影逝二度",
+      "Sekiro"
+    ]
+  },
+  {
+    "name_en": "Senua's Saga: Hellblade II",
+    "name_zh": "地狱之刃2：塞娜的传奇",
+    "aliases": [
+      "地狱之刃2",
+      "塞娜传奇",
+      "Hellblade 2"
+    ]
+  },
+  {
+    "name_en": "Serious Sam 4",
+    "name_zh": "英雄萨姆4",
+    "aliases": [
+      "英雄萨姆4",
+      "SS4"
+    ]
+  },
+  {
+    "name_en": "Shadow of the Tomb Raider",
+    "name_zh": "古墓丽影：暗影",
+    "aliases": [
+      "古墓丽影暗影",
+      "暗影",
+      "SOTTR"
+    ]
+  },
+  {
+    "name_en": "Shadow Warrior 3",
+    "name_zh": "影武者3",
+    "aliases": [
+      "影武者3",
+      "SW3"
+    ]
+  },
+  {
+    "name_en": "Shin Megami Tensei V",
+    "name_zh": "真·女神转生5",
+    "aliases": [
+      "真女神转生5",
+      "SMT5"
+    ]
+  },
+  {
+    "name_en": "Shin Megami Tensei V: Vengeance",
+    "name_zh": "真·女神转生5：复仇",
+    "aliases": [
+      "真女神转生5",
+      "SMT5",
+      "复仇"
+    ]
+  },
+  {
+    "name_en": "Sifu",
+    "name_zh": "师父",
+    "aliases": [
+      "师父",
+      "Sifu"
+    ]
+  },
+  {
+    "name_en": "Silent Hill 2 Remake",
+    "name_zh": "寂静岭2重制版",
+    "aliases": [
+      "寂静岭2重制版",
+      "SH2 Remake",
+      "寂静岭2"
+    ]
+  },
+  {
+    "name_en": "Skull and Bones",
+    "name_zh": "骷髅与骨头",
+    "aliases": [
+      "骷髅与骨头",
+      "海盗游戏",
+      "Skull & Bones"
+    ]
+  },
+  {
+    "name_en": "Slay the Spire",
+    "name_zh": "杀戮尖塔",
+    "aliases": [
+      "杀戮尖塔",
+      "Slay the Spire",
+      "爬塔"
+    ]
+  },
+  {
+    "name_en": "Sol Cresta",
+    "name_zh": "索尔克雷斯塔",
+    "aliases": [
+      "索尔克雷斯塔",
+      "Sol Cresta"
+    ]
+  },
+  {
+    "name_en": "Sons of the Forest",
+    "name_zh": "森林之子",
+    "aliases": [
+      "森林之子",
+      "Sons of the Forest"
+    ]
+  },
+  {
+    "name_en": "Spider-Man Remastered",
+    "name_zh": "蜘蛛侠重制版",
+    "aliases": [
+      "蜘蛛侠",
+      "漫威蜘蛛侠"
+    ]
+  },
+  {
+    "name_en": "Star Citizen",
+    "name_zh": "星际公民",
+    "aliases": [
+      "星际公民",
+      "Star Citizen"
+    ]
+  },
+  {
+    "name_en": "Star Wars Jedi: Fallen Order",
+    "name_zh": "星球大战绝地：陨落的武士团",
+    "aliases": [
+      "绝地陨落",
+      "JFO",
+      "星球大战绝地"
+    ]
+  },
+  {
+    "name_en": "Star Wars Jedi: Survivor",
+    "name_zh": "星球大战绝地：幸存者",
+    "aliases": [
+      "绝地幸存者",
+      "JS",
+      "星球大战绝地2"
+    ]
+  },
+  {
+    "name_en": "Star Wars: Battlefront II",
+    "name_zh": "星球大战：前线2",
+    "aliases": [
+      "星球大战前线2",
+      "前线2",
+      "SWBF2"
+    ]
+  },
+  {
+    "name_en": "Starfield",
+    "name_zh": "星空",
+    "aliases": [
+      "星空",
+      "Starfield"
+    ]
+  },
+  {
+    "name_en": "State of Decay 2",
+    "name_zh": "腐烂国度2",
+    "aliases": [
+      "腐烂国度2",
+      "SoD2",
+      "腐烂2"
+    ]
+  },
+  {
+    "name_en": "Steep",
+    "name_zh": "极限巅峰",
+    "aliases": [
+      "极限巅峰",
+      "Steep"
+    ]
+  },
+  {
+    "name_en": "Stellar Blade",
+    "name_zh": "剑星",
+    "aliases": [
+      "剑星",
+      "星刃",
+      "Stellar Blade"
+    ]
+  },
+  {
+    "name_en": "Stray",
+    "name_zh": "流浪",
+    "aliases": [
+      "流浪",
+      "猫咪游戏",
+      "Stray"
+    ]
+  },
+  {
+    "name_en": "Street Fighter 6",
+    "name_zh": "街头霸王6",
+    "aliases": [
+      "街霸6",
+      "SF6",
+      "街头霸王6"
+    ]
+  },
+  {
+    "name_en": "Subnautica",
+    "name_zh": "深海迷航",
+    "aliases": [
+      "深海迷航",
+      "Subnautica",
+      "美丽水世界"
+    ]
+  },
+  {
+    "name_en": "Subnautica: Below Zero",
+    "name_zh": "深海迷航：零度之下",
+    "aliases": [
+      "深海迷航零度之下",
+      "零度之下",
+      "Below Zero"
+    ]
+  },
+  {
+    "name_en": "Suicide Squad: Kill the Justice League",
+    "name_zh": "自杀小队：杀死正义联盟",
+    "aliases": [
+      "自杀小队",
+      "杀死正义联盟",
+      "SSKTJL"
+    ]
+  },
+  {
+    "name_en": "Tales of Arise",
+    "name_zh": "破晓传奇",
+    "aliases": [
+      "破晓传奇",
+      "Tales of Arise",
+      "传说系列"
+    ]
+  },
+  {
+    "name_en": "Tekken 8",
+    "name_zh": "铁拳8",
+    "aliases": [
+      "铁拳8",
+      "Tekken8"
+    ]
+  },
+  {
+    "name_en": "The Division 2",
+    "name_zh": "全境封锁2",
+    "aliases": [
+      "全境封锁2",
+      "Division2",
+      "TD2"
+    ]
+  },
+  {
+    "name_en": "The Elder Scrolls IV: Oblivion",
+    "name_zh": "上古卷轴4：湮没",
+    "aliases": [
+      "上古卷轴4",
+      "湮没",
+      "Oblivion"
+    ]
+  },
+  {
+    "name_en": "The Elder Scrolls Online",
+    "name_zh": "上古卷轴OL",
+    "aliases": [
+      "上古卷轴OL",
+      "ESO",
+      "老滚OL"
+    ]
+  },
+  {
+    "name_en": "The Elder Scrolls V: Skyrim",
+    "name_zh": "上古卷轴5：天际",
+    "aliases": [
+      "上古卷轴5",
+      "天际",
+      "Skyrim",
+      "老滚5"
+    ]
+  },
+  {
+    "name_en": "The Forest",
+    "name_zh": "森林",
+    "aliases": [
+      "森林",
+      "The Forest"
+    ]
+  },
+  {
+    "name_en": "The Last of Us Part I",
+    "name_zh": "最后生还者第一部",
+    "aliases": [
+      "最后生还者1",
+      "美国末日1",
+      "TLOU1"
+    ]
+  },
+  {
+    "name_en": "The Last of Us Part II",
+    "name_zh": "最后生还者第二部",
+    "aliases": [
+      "最后生还者2",
+      "美国末日2",
+      "TLOU2"
+    ]
+  },
+  {
+    "name_en": "The Long Dark",
+    "name_zh": "漫漫长夜",
+    "aliases": [
+      "漫漫长夜",
+      "The Long Dark"
+    ]
+  },
+  {
+    "name_en": "The Outer Worlds",
+    "name_zh": "天外世界",
+    "aliases": [
+      "天外世界",
+      "Outer Worlds"
+    ]
+  },
+  {
+    "name_en": "The Witcher 3: Wild Hunt",
+    "name_zh": "巫师3：狂猎",
+    "aliases": [
+      "巫师3",
+      "狂猎",
+      "Witcher 3"
+    ]
+  },
+  {
+    "name_en": "The Wonderful 101: Remastered",
+    "name_zh": "神奇101：重制版",
+    "aliases": [
+      "神奇101",
+      "Wonderful 101",
+      "TW101"
+    ]
+  },
+  {
+    "name_en": "Tom Clancy's Ghost Recon Breakpoint",
+    "name_zh": "幽灵行动：断点",
+    "aliases": [
+      "幽灵行动断点",
+      "断点"
+    ]
+  },
+  {
+    "name_en": "Tom Clancy's Ghost Recon Wildlands",
+    "name_zh": "幽灵行动：荒野",
+    "aliases": [
+      "幽灵行动荒野",
+      "荒野"
+    ]
+  },
+  {
+    "name_en": "Tom Clancy's Rainbow Six Siege",
+    "name_zh": "彩虹六号：围攻",
+    "aliases": [
+      "彩虹六号",
+      "R6",
+      "R6S"
+    ]
+  },
+  {
+    "name_en": "Tomb Raider (2013)",
+    "name_zh": "古墓丽影(2013)",
+    "aliases": [
+      "古墓丽影9",
+      "TR9",
+      "古墓丽影2013"
+    ]
+  },
+  {
+    "name_en": "Tony Hawk's Pro Skater 1 + 2",
+    "name_zh": "托尼·霍克职业滑板1+2",
+    "aliases": [
+      "托尼霍克滑板",
+      "THPS"
+    ]
+  },
+  {
+    "name_en": "Torment: Tides of Numenera",
+    "name_zh": "折磨：纽曼诺拉之潮",
+    "aliases": [
+      "纽曼诺拉之潮",
+      "Torment"
+    ]
+  },
+  {
+    "name_en": "Toukiden 2",
+    "name_zh": "讨鬼传2",
+    "aliases": [
+      "讨鬼传2",
+      "Toukiden 2"
+    ]
+  },
+  {
+    "name_en": "Tyranny",
+    "name_zh": "暴君",
+    "aliases": [
+      "暴君",
+      "Tyranny"
+    ]
+  },
+  {
+    "name_en": "UFC 5",
+    "name_zh": "UFC 5",
+    "aliases": [
+      "UFC5",
+      "终极格斗冠军赛5"
+    ]
+  },
+  {
+    "name_en": "Uncharted 4: A Thief's End",
+    "name_zh": "神秘海域4：盗贼末路",
+    "aliases": [
+      "神秘海域4",
+      "盗贼末路",
+      "UC4"
+    ]
+  },
+  {
+    "name_en": "Uncharted: Legacy of Thieves Collection",
+    "name_zh": "神秘海域：盗贼传奇合集",
+    "aliases": [
+      "神秘海域合集",
+      "盗贼传奇"
+    ]
+  },
+  {
+    "name_en": "V Rising",
+    "name_zh": "吸血鬼崛起",
+    "aliases": [
+      "吸血鬼崛起",
+      "V Rising"
+    ]
+  },
+  {
+    "name_en": "Valheim",
+    "name_zh": "英灵神殿",
+    "aliases": [
+      "英灵神殿",
+      "Valheim"
+    ]
+  },
+  {
+    "name_en": "Valorant",
+    "name_zh": "无畏契约",
+    "aliases": [
+      "无畏契约",
+      "Valorant",
+      "瓦洛兰特"
+    ]
+  },
+  {
+    "name_en": "Vampire Survivors",
+    "name_zh": "吸血鬼幸存者",
+    "aliases": [
+      "吸血鬼幸存者",
+      "Vampire Survivors"
+    ]
+  },
+  {
+    "name_en": "Wasteland 3",
+    "name_zh": "废土3",
+    "aliases": [
+      "废土3",
+      "Wasteland 3"
+    ]
+  },
+  {
+    "name_en": "Watch Dogs 2",
+    "name_zh": "看门狗2",
+    "aliases": [
+      "看门狗2",
+      "WD2"
+    ]
+  },
+  {
+    "name_en": "Watch Dogs: Legion",
+    "name_zh": "看门狗：军团",
+    "aliases": [
+      "看门狗军团",
+      "军团",
+      "WDL"
+    ]
+  },
+  {
+    "name_en": "Wild Hearts",
+    "name_zh": "狂野之心",
+    "aliases": [
+      "狂野之心",
+      "Wild Hearts"
+    ]
+  },
+  {
+    "name_en": "Wo Long: Fallen Dynasty",
+    "name_zh": "卧龙：苍天陨落",
+    "aliases": [
+      "卧龙",
+      "苍天陨落",
+      "Wo Long"
+    ]
+  },
+  {
+    "name_en": "WWE 2K24",
+    "name_zh": "WWE 2K24",
+    "aliases": [
+      "WWE2K24",
+      "摔角2K24"
+    ]
+  },
+  {
+    "name_en": "Xenoblade Chronicles 2",
+    "name_zh": "异度神剑2",
+    "aliases": [
+      "异度神剑2",
+      "Xenoblade 2",
+      "XB2"
+    ]
+  },
+  {
+    "name_en": "Xenoblade Chronicles 3",
+    "name_zh": "异度神剑3",
+    "aliases": [
+      "异度神剑3",
+      "Xenoblade 3",
+      "XB3"
+    ]
+  },
+  {
+    "name_en": "Xenoblade Chronicles: Definitive Edition",
+    "name_zh": "异度神剑：终极版",
+    "aliases": [
+      "异度神剑终极版",
+      "Xenoblade DE"
+    ]
+  }
+]
