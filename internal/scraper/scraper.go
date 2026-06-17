@@ -3,6 +3,7 @@ package scraper
 import (
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -90,19 +91,19 @@ func (s *Scraper) FetchListPage(page int) ([]*model.Game, error) {
 }
 
 // FetchDetailPage fetches and parses a detail page for a specific game.
-// It returns the trainer data extracted from the page.
-func (s *Scraper) FetchDetailPage(sourceURL string) (*model.Trainer, error) {
+// It returns the parsed trainer versions (download table) plus page metadata.
+func (s *Scraper) FetchDetailPage(sourceURL string) (*TrainerPage, error) {
 	html, err := s.FetchPage(sourceURL)
 	if err != nil {
 		return nil, err
 	}
 
-	trainer, err := ParseTrainerDetail(html)
+	page, err := ParseTrainerDetail(html)
 	if err != nil {
 		return nil, fmt.Errorf("parse detail page %s: %w", sourceURL, err)
 	}
 
-	return trainer, nil
+	return page, nil
 }
 
 // SearchTrainers searches flingtrainer.com for trainers matching the query.
@@ -128,27 +129,73 @@ func (s *Scraper) SearchTrainers(query string) ([]*model.Game, error) {
 	return games, nil
 }
 
-// FetchAndSave fetches a list page, translates names, and saves to DB.
-// It returns the number of new/updated games saved.
-func (s *Scraper) FetchAndSave(page int) (int, error) {
+// FetchAndSave fetches a list page, then crawls each game's detail page to
+// collect trainer versions, and persists everything to the DB.
+//
+// Flow: list page -> for each game, fetch detail -> upsert game + its trainers.
+// Returns (gamesSaved, trainersSaved).
+func (s *Scraper) FetchAndSave(page int) (int, int, error) {
 	games, err := s.FetchListPage(page)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 
 	if len(games) == 0 {
-		return 0, nil
+		return 0, 0, nil
 	}
 
-	// Save to DB via BatchUpsert
+	// Persist games first (so we have their IDs via source_id upsert).
 	if err := s.gameRepo.BatchUpsert(games); err != nil {
-		return 0, fmt.Errorf("save games from page %d: %w", page, err)
+		return 0, 0, fmt.Errorf("save games from page %d: %w", page, err)
 	}
 
-	return len(games), nil
+	// Now fetch detail pages and collect trainers, attaching game IDs.
+	var allTrainers []*model.Trainer
+	for _, g := range games {
+		// Resolve the DB-assigned ID for this game (by source_id).
+		stored, err := s.gameRepo.GetBySourceID(g.SourceID)
+		if err != nil || stored == nil {
+			log.Printf("[Scraper] skip detail for %q: cannot resolve game id (err=%v)", g.SourceID, err)
+			continue
+		}
+
+		page, err := s.FetchDetailPage(g.SourceURL)
+		if err != nil {
+			log.Printf("[Scraper] detail fetch failed for %q: %v", g.SourceURL, err)
+			continue
+		}
+
+		// If the detail page gave us a fresher updated_at, bump the game record.
+		if page.UpdatedAt > 0 && page.UpdatedAt > stored.UpdatedAt {
+			stored.UpdatedAt = page.UpdatedAt
+			if page.Options != "" {
+				if n := parseOptionsNum(page.Options); n > 0 {
+					stored.OptionsNum = n
+				}
+			}
+			_ = s.gameRepo.BatchUpsert([]*model.Game{stored})
+		}
+
+		for _, t := range page.Trainers {
+			t.GameID = stored.ID
+			allTrainers = append(allTrainers, t)
+		}
+
+		// Polite delay between detail requests.
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	if len(allTrainers) > 0 {
+		if err := s.trainerRepo.BatchUpsert(allTrainers); err != nil {
+			return len(games), 0, fmt.Errorf("save trainers from page %d: %w", page, err)
+		}
+	}
+
+	return len(games), len(allTrainers), nil
 }
 
-// SearchAndSave searches for trainers, translates names, and saves results to DB.
+// SearchAndSave searches for trainers, then crawls detail pages for any games
+// not already in the DB, and persists results.
 func (s *Scraper) SearchAndSave(query string) ([]*model.Game, error) {
 	games, err := s.SearchTrainers(query)
 	if err != nil {
@@ -169,26 +216,28 @@ func (s *Scraper) SearchAndSave(query string) ([]*model.Game, error) {
 
 // FetchMultiplePages fetches and saves multiple consecutive list pages
 // with a polite delay between requests.
-// It returns the total number of games saved across all pages.
-func (s *Scraper) FetchMultiplePages(startPage, count int) (int, error) {
-	totalSaved := 0
+// It returns the total number of games and trainers saved across all pages.
+func (s *Scraper) FetchMultiplePages(startPage, count int) (int, int, error) {
+	totalGames := 0
+	totalTrainers := 0
 
 	for i := 0; i < count; i++ {
 		page := startPage + i
-		saved, err := s.FetchAndSave(page)
+		games, trainers, err := s.FetchAndSave(page)
 		if err != nil {
 			// Return what we have so far along with the error
-			return totalSaved, fmt.Errorf("page %d: %w", page, err)
+			return totalGames, totalTrainers, fmt.Errorf("page %d: %w", page, err)
 		}
-		totalSaved += saved
+		totalGames += games
+		totalTrainers += trainers
 
-		// Polite delay between requests (skip after the last page)
+		// Polite delay between list pages (skip after the last page)
 		if i < count-1 {
 			time.Sleep(1 * time.Second)
 		}
 	}
 
-	return totalSaved, nil
+	return totalGames, totalTrainers, nil
 }
 
 // translateGameName translates a game's English name to Chinese using the mapping service.

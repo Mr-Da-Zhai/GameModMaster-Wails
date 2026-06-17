@@ -15,8 +15,14 @@ import (
 // optionsRe matches patterns like "15 Options" or "15 Trainer Options"
 var optionsRe = regexp.MustCompile(`(?i)(\d+)\s*(?:trainer\s+)?options?`)
 
-// gameVersionRe matches "Game Version: XXXXX"
-var gameVersionRe = regexp.MustCompile(`(?i)Game\s*Version\s*[:：]\s*(.+)`)
+// gameVersionRe matches "Game Version: XXXXX" (also "Game Version XXXXX" without colon)
+var gameVersionRe = regexp.MustCompile(`(?is)Game\s*Version\s*[:：]?\s*(.+?)(?:·| Last Updated|$|\n)`)
+
+// lastUpdatedRe matches "Last Updated: 2026.06.15"
+var lastUpdatedRe = regexp.MustCompile(`(?i)Last\s*Updated\s*[:：]\s*([0-9./\-]+)`)
+
+// metaRe matches the leading summary line "27 Options · Game Version: Early Access+ · Last Updated: 2026.06.15"
+var summaryRe = regexp.MustCompile(`(?is)(\d+)\s*(?:trainer\s+)?options?\s*[·•・]\s*Game\s*Version\s*[:：]?\s*(.+?)\s*[·•・]\s*Last\s*Updated`)
 
 // ParseTrainerList parses the HTML from a flingtrainer.com list page
 // and returns a slice of Game structs.
@@ -39,16 +45,27 @@ func ParseTrainerList(html string) ([]*model.Game, error) {
 		}
 		game.SourceID = ExtractTrainerID(game.SourceURL)
 
-		// Thumbnail / cover URL
-		thumbImg := s.Find(".post-details-thumb img")
-		if src, exists := thumbImg.Attr("src"); exists {
-			game.CoverURL = strings.TrimSpace(src)
+		// Thumbnail / cover URL.
+		// The .post-details-thumb wrapper is often an empty img with no src;
+		// the real cover lives in img.wp-post-image (attachment-stylizer-small).
+		coverURL := ""
+		if thumbImg := s.Find(".post-details-thumb img"); thumbImg.Length() > 0 {
+			if src, exists := thumbImg.Attr("src"); exists && src != "" {
+				coverURL = strings.TrimSpace(src)
+			}
 		}
+		if coverURL == "" {
+			if img := s.Find("img.wp-post-image").First(); img.Length() > 0 {
+				if src, exists := img.Attr("src"); exists && src != "" {
+					coverURL = strings.TrimSpace(src)
+				}
+			}
+		}
+		game.CoverURL = coverURL
 
-		// Options number — look for pattern in the entry text
+		// Options number — look in entry text then title
 		entryText := s.Find(".entry").Text()
 		game.OptionsNum = parseOptionsNum(entryText)
-		// Also try the title if not found in entry
 		if game.OptionsNum == 0 {
 			game.OptionsNum = parseOptionsNum(game.NameEN)
 		}
@@ -65,53 +82,149 @@ func ParseTrainerList(html string) ([]*model.Game, error) {
 	return games, nil
 }
 
+// TrainerPage holds the result of parsing a detail page: the shared game meta
+// plus one Trainer per downloadable version found in the versions table.
+type TrainerPage struct {
+	GameVersion string           // e.g. "Early Access+" — shared across versions
+	Options     string           // e.g. "27 Options"
+	UpdatedAt   int64            // best-effort page-level timestamp (Last Updated)
+	Trainers    []*model.Trainer // one entry per version row
+}
+
 // ParseTrainerDetail parses the HTML from a flingtrainer.com detail/trainer page
-// and returns a Trainer struct.
-func ParseTrainerDetail(html string) (*model.Trainer, error) {
+// and returns all trainer versions found on the page.
+//
+// FLiNG detail pages list multiple versions in a `.download-attachments` table.
+// Each row is one version: [icon, file name + download link, date, size, downloads].
+// Game-level metadata (options count, game version) lives in the leading summary
+// line of the `.entry` block.
+func ParseTrainerDetail(html string) (*TrainerPage, error) {
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
 	if err != nil {
 		return nil, fmt.Errorf("parse HTML: %w", err)
 	}
 
-	trainer := &model.Trainer{}
+	page := &TrainerPage{}
 
-	// Title (for reference, not stored directly)
-	// title := strings.TrimSpace(doc.Find("h1.post-title").Text())
+	// Parse the summary line, e.g.:
+	//   "27 Options · Game Version: Early Access+ · Last Updated: 2026.06.15"
+	summaryText := strings.TrimSpace(doc.Find(".entry > p").First().Text())
 
-	// Full entry text for extracting version info
-	entryText := doc.Find(".entry").Text()
-
-	// Version: extract options number string like "15 Options"
-	trainer.Version = extractOptionsString(entryText)
-
-	// Game version
-	trainer.GameVersion = extractGameVersion(entryText)
-
-	// Download link
-	attachLink := doc.Find(".attachment-link")
-	if href, exists := attachLink.Attr("href"); exists {
-		trainer.DownloadURL = strings.TrimSpace(href)
+	if m := summaryRe.FindStringSubmatch(summaryText); len(m) >= 3 {
+		page.Options = m[1] + " Options"
+		page.GameVersion = strings.TrimSpace(m[2])
+	} else {
+		// Fallbacks when the summary line shape differs
+		if opts := extractOptionsString(summaryText); opts != "" {
+			page.Options = opts
+		}
+		page.GameVersion = extractGameVersion(summaryText)
 	}
 
-	// Download count
-	downloadsText := doc.Find(".attachment-downloads").Text()
-	trainer.DownloadCount = parseDownloadCount(downloadsText)
-
-	// Main image (for potential future use)
-	// mainImg := doc.Find(".entry img.aligncenter")
-	// if src, exists := mainImg.Attr("src"); exists {
-	// 	_ = src
-	// }
-
-	// SourceHash: SHA-ish hash of download URL for dedup
-	if trainer.DownloadURL != "" {
-		trainer.SourceHash = simpleHash(trainer.DownloadURL)
+	// Page-level updated time from "Last Updated: YYYY.MM.DD"
+	if m := lastUpdatedRe.FindStringSubmatch(summaryText); len(m) >= 2 {
+		page.UpdatedAt = parseDotDate(m[1])
+	}
+	if page.UpdatedAt == 0 {
+		// Fall back to the most recent version-row date parsed below
 	}
 
-	// UpdatedAt: use current time as fallback; ideally parsed from page
-	trainer.UpdatedAt = time.Now().Unix()
+	// Parse the versions table. Each <tr> after the header is one version.
+	var latestRowTime int64
+	doc.Find(".download-attachments tr").Each(func(i int, tr *goquery.Selection) {
+		// Skip header row (contains "File" / "Date added")
+		firstCellText := strings.TrimSpace(tr.Find("td").First().Text()) + " " + strings.TrimSpace(tr.Find("th").First().Text())
+		if i == 0 && (strings.Contains(strings.ToLower(firstCellText), "file") || tr.Find("td").Length() == 0) {
+			return
+		}
 
-	return trainer, nil
+		cells := tr.Find("td")
+		if cells.Length() < 2 {
+			return
+		}
+
+		trainer := &model.Trainer{}
+
+		// Find the download anchor anywhere in the row (filename cell)
+		var href, fileName string
+		tr.Find("a").Each(func(_ int, a *goquery.Selection) {
+			if href != "" {
+				return
+			}
+			if h, ok := a.Attr("href"); ok && strings.Contains(h, "/downloads/") {
+				href = strings.TrimSpace(h)
+				fileName = strings.TrimSpace(a.Text())
+			}
+		})
+		trainer.DownloadURL = href
+		trainer.FileName = fileName
+		trainer.Version = page.Options // best available version string
+
+		// Map cells by position. The row layout is:
+		//   [0] icon, [1] filename/link, [2] date, [3] size, [4] downloads
+		// but the filename sometimes occupies cell [0]. Be defensive: collect
+		// the non-link text cells and assign size/downloads by heuristics.
+		var textCells []string
+		cells.Each(func(_ int, td *goquery.Selection) {
+			// skip the cell that contains the link (already captured)
+			if td.Find("a[href*='/downloads/']").Length() > 0 {
+				return
+			}
+			// skip icon-only cells
+			t := strings.TrimSpace(td.Text())
+			if t == "" && td.Find("img").Length() > 0 {
+				return
+			}
+			if t != "" {
+				textCells = append(textCells, t)
+			}
+		})
+
+		for _, tc := range textCells {
+			switch {
+			case trainer.FileSize == 0 && looksLikeFileSize(tc):
+				trainer.FileSize = parseFileSize(tc)
+			case trainer.DownloadCount == 0 && looksLikeInt(tc):
+				if n, err := strconv.Atoi(strings.ReplaceAll(tc, ",", "")); err == nil {
+					trainer.DownloadCount = int32(n)
+				}
+			case trainer.UpdatedAt == 0 && looksLikeDate(tc):
+				if ts := parseRowDate(tc); ts > 0 {
+					trainer.UpdatedAt = ts
+					if ts > latestRowTime {
+						latestRowTime = ts
+					}
+				}
+			}
+		}
+
+		// SourceHash: dedup key derived from the download URL token
+		if trainer.DownloadURL != "" {
+			trainer.SourceHash = simpleHash(trainer.DownloadURL)
+		} else {
+			// No usable download link — skip this row
+			return
+		}
+
+		// Game version fallback to page-level version
+		trainer.GameVersion = page.GameVersion
+
+		// If we still don't have an updated_at, use the page-level one
+		if trainer.UpdatedAt == 0 {
+			trainer.UpdatedAt = page.UpdatedAt
+		}
+
+		page.Trainers = append(page.Trainers, trainer)
+	})
+
+	if page.UpdatedAt == 0 {
+		page.UpdatedAt = latestRowTime
+	}
+	if page.UpdatedAt == 0 {
+		page.UpdatedAt = time.Now().Unix()
+	}
+
+	return page, nil
 }
 
 // ExtractTrainerID extracts the slug from a flingtrainer URL.
@@ -120,7 +233,6 @@ func ExtractTrainerID(sourceURL string) string {
 	u := strings.TrimSpace(sourceURL)
 	u = strings.TrimSuffix(u, "/")
 
-	// Take the last path segment
 	parts := strings.Split(u, "/")
 	if len(parts) == 0 {
 		return ""
@@ -158,23 +270,6 @@ func extractGameVersion(text string) string {
 	return ""
 }
 
-// parseDownloadCount extracts the download count from text like "Downloads: 12345"
-func parseDownloadCount(text string) int32 {
-	// Remove all non-digit characters except digits
-	text = strings.TrimSpace(text)
-	// Try to find a number in the text
-	re := regexp.MustCompile(`(\d[\d,]*)`)
-	matches := re.FindStringSubmatch(text)
-	if len(matches) >= 2 {
-		numStr := strings.ReplaceAll(matches[1], ",", "")
-		n, err := strconv.Atoi(numStr)
-		if err == nil {
-			return int32(n)
-		}
-	}
-	return 0
-}
-
 // parseDateParts converts day/month/year strings to Unix timestamp.
 // Returns 0 if parsing fails.
 func parseDateParts(year, month, day string) int64 {
@@ -192,7 +287,6 @@ func parseDateParts(year, month, day string) int64 {
 		return 0
 	}
 
-	// Month can be a name ("Jan", "January") or a number
 	var monthNum int
 	if mn, err := strconv.Atoi(month); err == nil {
 		monthNum = mn
@@ -208,12 +302,96 @@ func parseDateParts(year, month, day string) int64 {
 	return t.Unix()
 }
 
+// parseDotDate parses "2026.06.15" into a Unix timestamp.
+func parseDotDate(s string) int64 {
+	s = strings.TrimSpace(s)
+	s = strings.ReplaceAll(s, "-", ".")
+	s = strings.ReplaceAll(s, "/", ".")
+	parts := strings.Split(s, ".")
+	if len(parts) != 3 {
+		return 0
+	}
+	y, err1 := strconv.Atoi(parts[0])
+	m, err2 := strconv.Atoi(parts[1])
+	d, err3 := strconv.Atoi(parts[2])
+	if err1 != nil || err2 != nil || err3 != nil {
+		return 0
+	}
+	if m < 1 || m > 12 {
+		return 0
+	}
+	return time.Date(y, time.Month(m), d, 0, 0, 0, 0, time.UTC).Unix()
+}
+
+// parseRowDate parses a row date like "2026-06-15 07:51" into a Unix timestamp.
+func parseRowDate(s string) int64 {
+	s = strings.TrimSpace(s)
+	layouts := []string{"2006-01-02 15:04", "2006-01-02", "2006.01.02"}
+	for _, layout := range layouts {
+		if t, err := time.Parse(layout, s); err == nil {
+			return t.Unix()
+		}
+	}
+	return 0
+}
+
+// looksLikeFileSize returns true for strings like "855 KB", "1.2 MB".
+func looksLikeFileSize(s string) bool {
+	return regexp.MustCompile(`(?i)^\s*[\d.,]+\s*(?:B|KB|MB|GB|bytes?)\s*$`).MatchString(s)
+}
+
+// looksLikeInt returns true for strings that are plain integers (with optional commas).
+func looksLikeInt(s string) bool {
+	cleaned := strings.ReplaceAll(strings.TrimSpace(s), ",", "")
+	_, err := strconv.Atoi(cleaned)
+	return err == nil && cleaned != ""
+}
+
+// looksLikeDate returns true for strings matching common date layouts.
+func looksLikeDate(s string) bool {
+	s = strings.TrimSpace(s)
+	for _, layout := range []string{"2006-01-02 15:04", "2006-01-02", "2006.01.02"} {
+		if _, err := time.Parse(layout, s); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
+// parseFileSize converts a human-readable size ("855 KB", "1.2 MB") into bytes.
+func parseFileSize(s string) int32 {
+	s = strings.TrimSpace(s)
+	fields := strings.Fields(s)
+	if len(fields) != 2 {
+		return 0
+	}
+	num, err := strconv.ParseFloat(fields[0], 64)
+	if err != nil {
+		return 0
+	}
+	unit := strings.ToUpper(fields[1])
+	var mult float64
+	switch unit {
+	case "B", "BYTES":
+		mult = 1
+	case "KB":
+		mult = 1024
+	case "MB":
+		mult = 1024 * 1024
+	case "GB":
+		mult = 1024 * 1024 * 1024
+	default:
+		return 0
+	}
+	return int32(num * mult)
+}
+
 // parseMonthName converts month name (short or long) to number.
 func parseMonthName(name string) int {
 	names := map[string]int{
-		"january":   1, "february": 2, "march":     3, "april":     4,
-		"may":       5, "june":     6, "july":      7, "august":    8,
-		"september": 9, "october":  10, "november": 11, "december": 12,
+		"january": 1, "february": 2, "march": 3, "april": 4,
+		"may": 5, "june": 6, "july": 7, "august": 8,
+		"september": 9, "october": 10, "november": 11, "december": 12,
 		"jan": 1, "feb": 2, "mar": 3, "apr": 4,
 		"jun": 6, "jul": 7, "aug": 8, "sep": 9,
 		"oct": 10, "nov": 11, "dec": 12,

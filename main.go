@@ -30,7 +30,7 @@ func main() {
 		},
 	})
 
-	app.Window.NewWithOptions(application.WebviewWindowOptions{
+	mainWindow := app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:     "GameModMaster - 游戏修改器大师",
 		Width:     1200,
 		Height:    800,
@@ -44,6 +44,9 @@ func main() {
 		BackgroundColour: application.NewRGB(27, 38, 54),
 		URL:              "/",
 	})
+
+	// Give the service a window reference so it can emit events to the frontend.
+	appService.SetWindow(mainWindow)
 
 	if err := app.Run(); err != nil {
 		log.Fatal(err)

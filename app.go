@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"GameModMaster/internal/index"
@@ -17,6 +18,14 @@ import (
 	"GameModMaster/internal/repo"
 	"GameModMaster/internal/scraper"
 	"GameModMaster/internal/service"
+
+	"github.com/wailsapp/wails/v3/pkg/application"
+)
+
+// Event names emitted to the frontend.
+const (
+	EventRefreshProgress = "refresh:progress"
+	EventDownloadProgress = "download:progress"
 )
 
 // AppService is the main service exposed to the Wails frontend.
@@ -31,6 +40,14 @@ type AppService struct {
 	scraperService  *scraper.Scraper
 	downloadService *service.DownloadService
 	dataDir         string
+
+	ctx    context.Context
+	window *application.WebviewWindow
+
+	// refresh task state (guarded by refreshMu)
+	refreshMu     sync.Mutex
+	refreshing    bool
+	refreshResult string
 }
 
 // NewAppService creates and initializes the AppService.
@@ -78,7 +95,31 @@ func NewAppService(embeddedMapping []byte) *AppService {
 	a.scraperService = scraper.NewScraper(a.gameRepo, a.trainerRepo, a.mappingService)
 	a.downloadService = service.NewDownloadService(a.stateRepo)
 
+	// 7. Persist mapping count so the settings page can show it.
+	a.persistMappingCount()
+
 	return a
+}
+
+// ServiceStartup is called by Wails once the application is running.
+// We capture the context for cancellation of long-running tasks.
+func (a *AppService) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
+	a.ctx = ctx
+	return nil
+}
+
+// SetWindow stores a reference to the main window so the service can emit events.
+// Called from main() after the window is created.
+func (a *AppService) SetWindow(w *application.WebviewWindow) {
+	a.window = w
+}
+
+// emitEvent broadcasts a custom event to the frontend. No-op if no window yet.
+func (a *AppService) emitEvent(name string, data ...any) {
+	if a.window == nil {
+		return
+	}
+	a.window.EmitEvent(name, data...)
 }
 
 // Shutdown closes the database connection on app exit.
@@ -123,6 +164,26 @@ func (a *AppService) refreshIndex() {
 	}
 }
 
+// persistMappingCount stores the loaded mapping count into kv_store so the
+// settings page can read it through GetSettings().
+func (a *AppService) persistMappingCount() {
+	count := len(a.mappingService.GetMapping())
+	if count == 0 {
+		return
+	}
+	_ = a.setKV("mapping_count", fmt.Sprintf("%d", count))
+}
+
+// setKV writes a single key/value into kv_store.
+func (a *AppService) setKV(key, value string) error {
+	now := time.Now().Unix()
+	_, err := a.db.Exec(
+		"INSERT OR REPLACE INTO kv_store (key, value, updated_at) VALUES (?, ?, ?)",
+		key, value, now,
+	)
+	return err
+}
+
 // ===== Data Query Methods =====
 
 // GetTrainers returns paginated trainers for the home page.
@@ -155,6 +216,11 @@ func (a *AppService) GetTrainers(page int, pageSize int) ([]map[string]interface
 	}
 
 	return results, nil
+}
+
+// GetTotalGames returns the total number of games in the index.
+func (a *AppService) GetTotalGames() int {
+	return len(a.idx.GamesByID)
 }
 
 // SearchTrainers searches by query (Chinese or English).
@@ -220,15 +286,15 @@ func (a *AppService) GetTrainerDetail(gameID int32) (map[string]interface{}, err
 
 	result := map[string]interface{}{
 		"game": map[string]interface{}{
-			"id":          g.ID,
-			"source_id":   g.SourceID,
-			"name_en":     g.NameEN,
-			"name_local":  g.NameLocal,
+			"id":           g.ID,
+			"source_id":    g.SourceID,
+			"name_en":      g.NameEN,
+			"name_local":   g.NameLocal,
 			"display_name": displayName,
-			"cover_url":   g.CoverURL,
-			"source_url":  g.SourceURL,
-			"options_num": g.OptionsNum,
-			"updated_at":  g.UpdatedAt,
+			"cover_url":    g.CoverURL,
+			"source_url":   g.SourceURL,
+			"options_num":  g.OptionsNum,
+			"updated_at":   g.UpdatedAt,
 		},
 		"trainers": trainerList,
 	}
@@ -276,9 +342,24 @@ func (a *AppService) GetInstalledTrainers() ([]map[string]interface{}, error) {
 	return results, nil
 }
 
+// IsRefreshing reports whether a refresh task is currently running.
+func (a *AppService) IsRefreshing() bool {
+	a.refreshMu.Lock()
+	defer a.refreshMu.Unlock()
+	return a.refreshing
+}
+
+// GetRefreshResult returns the human-readable result of the last refresh.
+func (a *AppService) GetRefreshResult() string {
+	a.refreshMu.Lock()
+	defer a.refreshMu.Unlock()
+	return a.refreshResult
+}
+
 // ===== Action Methods =====
 
 // DownloadTrainer downloads a trainer file.
+// Runs synchronously; progress is emitted via the "download:progress" event.
 func (a *AppService) DownloadTrainer(trainerID int32) error {
 	t, ok := a.idx.TrainersByID[trainerID]
 	if !ok {
@@ -289,16 +370,25 @@ func (a *AppService) DownloadTrainer(trainerID int32) error {
 		return fmt.Errorf("trainer %d has no download URL", trainerID)
 	}
 
-	// Determine download directory
-	downloadDir := filepath.Join(a.dataDir, "downloads")
+	// Determine download directory (honour user-configured path if set)
+	downloadDir := a.downloadDir()
 	fileName := t.FileName
 	if fileName == "" {
 		fileName = filepath.Base(t.DownloadURL)
 	}
 
-	// Download the file
-	ctx := context.Background()
-	localPath, err := a.downloadService.Download(ctx, t.DownloadURL, downloadDir, fileName, nil)
+	// Progress callback -> emit event to frontend
+	progress := func(downloaded, total int64, speed float64) {
+		a.emitEvent(EventDownloadProgress, map[string]interface{}{
+			"trainer_id": trainerID,
+			"downloaded": downloaded,
+			"total":      total,
+			"speed":      speed,
+		})
+	}
+
+	ctx := a.requestContext()
+	localPath, err := a.downloadService.Download(ctx, t.DownloadURL, downloadDir, fileName, progress)
 	if err != nil {
 		return fmt.Errorf("download failed: %w", err)
 	}
@@ -323,6 +413,12 @@ func (a *AppService) DownloadTrainer(trainerID int32) error {
 	if err := a.downloadService.MarkDownloaded(trainerID, localPath); err != nil {
 		return fmt.Errorf("mark downloaded failed: %w", err)
 	}
+
+	// Signal completion
+	a.emitEvent(EventDownloadProgress, map[string]interface{}{
+		"trainer_id": trainerID,
+		"done":       true,
+	})
 
 	// Refresh index
 	a.refreshIndex()
@@ -400,7 +496,7 @@ func (a *AppService) DeleteTrainer(trainerID int32) error {
 			log.Printf("[AppService] Warning: failed to remove file %s: %v", state.LocalPath, err)
 		}
 		// Try to remove the trainer directory too
-		trainerDir := filepath.Join(a.dataDir, "downloads", fmt.Sprintf("trainer_%d", trainerID))
+		trainerDir := filepath.Join(a.downloadDir(), fmt.Sprintf("trainer_%d", trainerID))
 		os.RemoveAll(trainerDir)
 	}
 
@@ -413,24 +509,125 @@ func (a *AppService) DeleteTrainer(trainerID int32) error {
 	return nil
 }
 
-// RefreshData fetches latest data from flingtrainer.com and updates DB.
+// RefreshData fetches latest data from flingtrainer.com asynchronously.
+// It returns immediately; progress and completion are reported via the
+// "refresh:progress" event. Use IsRefreshing() / GetRefreshResult() to poll.
 func (a *AppService) RefreshData() error {
-	// Fetch first 3 pages of new data
-	totalSaved, err := a.scraperService.FetchMultiplePages(1, 3)
+	a.refreshMu.Lock()
+	if a.refreshing {
+		a.refreshMu.Unlock()
+		return fmt.Errorf("refresh already in progress")
+	}
+	a.refreshing = true
+	a.refreshResult = ""
+	a.refreshMu.Unlock()
+
+	go a.runRefresh()
+	return nil
+}
+
+// RefreshDataSync fetches latest data synchronously and returns when done.
+// Useful for first-run seeding or tests; prefer RefreshData from the UI.
+func (a *AppService) RefreshDataSync() (string, error) {
+	a.refreshMu.Lock()
+	if a.refreshing {
+		a.refreshMu.Unlock()
+		return "", fmt.Errorf("refresh already in progress")
+	}
+	a.refreshing = true
+	a.refreshMu.Unlock()
+	defer func() {
+		a.refreshMu.Lock()
+		a.refreshing = false
+		a.refreshMu.Unlock()
+	}()
+
+	return a.doFetch(1, 3)
+}
+
+// runRefresh executes the fetch off the main goroutine.
+func (a *AppService) runRefresh() {
+	defer func() {
+		a.refreshMu.Lock()
+		a.refreshing = false
+		a.refreshMu.Unlock()
+	}()
+
+	startPage, pageCount := 1, 3
+	summary, err := a.doFetch(startPage, pageCount)
 	if err != nil {
-		log.Printf("[AppService] Refresh partial failure: %v", err)
-		// Still refresh what we got
+		log.Printf("[AppService] Refresh error: %v", err)
+		summary = fmt.Sprintf("%s (出错: %v)", summary, err)
+	}
+	a.refreshMu.Lock()
+	a.refreshResult = summary
+	a.refreshMu.Unlock()
+
+	// Notify the frontend that the refresh finished.
+	a.emitEvent(EventRefreshProgress, map[string]interface{}{
+		"done":    true,
+		"summary": summary,
+	})
+}
+
+// doFetch performs the multi-page crawl with progress events.
+func (a *AppService) doFetch(startPage, pageCount int) (string, error) {
+	totalGames := 0
+	totalTrainers := 0
+	var firstErr error
+
+	for i := 0; i < pageCount; i++ {
+		page := startPage + i
+		games, trainers, err := a.scraperService.FetchAndSave(page)
+		totalGames += games
+		totalTrainers += trainers
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			log.Printf("[AppService] page %d: %v", page, err)
+		}
+
+		a.emitEvent(EventRefreshProgress, map[string]interface{}{
+			"page":      page,
+			"total":     pageCount,
+			"current":   i + 1,
+			"games":     totalGames,
+			"trainers":  totalTrainers,
+		})
 	}
 
 	// Rebuild index with new data
 	a.refreshIndex()
 
-	if err != nil {
-		return fmt.Errorf("refresh completed with errors (saved %d games): %w", totalSaved, err)
-	}
+	summary := fmt.Sprintf("已更新 %d 个游戏, %d 个修改器", totalGames, totalTrainers)
+	return summary, firstErr
+}
 
-	log.Printf("[AppService] Refresh complete: %d games updated", totalSaved)
-	return nil
+// requestContext returns the app context if available, else background.
+func (a *AppService) requestContext() context.Context {
+	if a.ctx != nil {
+		return a.ctx
+	}
+	return context.Background()
+}
+
+// downloadDir returns the configured download directory.
+func (a *AppService) downloadDir() string {
+	if custom := a.getKV("download_dir"); custom != "" {
+		return custom
+	}
+	return filepath.Join(a.dataDir, "downloads")
+}
+
+// getKV reads a single key from kv_store (empty string if missing).
+func (a *AppService) getKV(key string) string {
+	row := a.db.QueryRow("SELECT value FROM kv_store WHERE key = ?", key)
+	var v string
+	if err := row.Scan(&v); err != nil {
+		return ""
+	}
+	return v
 }
 
 // ===== Settings Methods =====
@@ -438,7 +635,8 @@ func (a *AppService) RefreshData() error {
 // GetSettings returns app settings from kv_store.
 func (a *AppService) GetSettings() map[string]interface{} {
 	settings := map[string]interface{}{
-		"data_dir": a.dataDir,
+		"data_dir":    a.dataDir,
+		"download_dir": a.downloadDir(),
 	}
 
 	// Load settings from kv_store
@@ -462,15 +660,20 @@ func (a *AppService) GetSettings() map[string]interface{} {
 		}
 	}
 
+	// Ensure mapping_count reflects the live mapping service if kv is empty.
+	if settings["mapping_count"] == nil || settings["mapping_count"] == "" {
+		if n := len(a.mappingService.GetMapping()); n > 0 {
+			settings["mapping_count"] = n
+		}
+	}
+
 	return settings
 }
 
 // SaveSettings saves settings to kv_store.
 func (a *AppService) SaveSettings(settings map[string]interface{}) error {
-	now := time.Now().Unix()
-
 	for key, val := range settings {
-		// Skip internal keys
+		// Skip read-only keys
 		if key == "data_dir" {
 			continue
 		}
@@ -487,11 +690,7 @@ func (a *AppService) SaveSettings(settings map[string]interface{}) error {
 			valueStr = string(bytes)
 		}
 
-		_, err := a.db.Exec(
-			"INSERT OR REPLACE INTO kv_store (key, value, updated_at) VALUES (?, ?, ?)",
-			key, valueStr, now,
-		)
-		if err != nil {
+		if err := a.setKV(key, valueStr); err != nil {
 			return fmt.Errorf("save setting %q: %w", key, err)
 		}
 	}
@@ -499,9 +698,25 @@ func (a *AppService) SaveSettings(settings map[string]interface{}) error {
 	return nil
 }
 
+// SetDownloadDir configures the download directory and creates it if needed.
+func (a *AppService) SetDownloadDir(dir string) error {
+	if dir == "" {
+		return fmt.Errorf("download dir cannot be empty")
+	}
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("create download dir: %w", err)
+	}
+	return a.setKV("download_dir", dir)
+}
+
 // GetDataDir returns the data directory path.
 func (a *AppService) GetDataDir() string {
 	return a.dataDir
+}
+
+// GetMappingCount returns the number of loaded name-mapping entries.
+func (a *AppService) GetMappingCount() int {
+	return len(a.mappingService.GetMapping())
 }
 
 // ===== Helper Methods =====
@@ -518,15 +733,15 @@ func (a *AppService) buildGameEntry(g *model.Game) map[string]interface{} {
 	}
 
 	entry := map[string]interface{}{
-		"id":           g.ID,
-		"source_id":    g.SourceID,
-		"name_en":      g.NameEN,
-		"name_local":   g.NameLocal,
-		"display_name": displayName,
-		"cover_url":    g.CoverURL,
-		"source_url":   g.SourceURL,
-		"options_num":  g.OptionsNum,
-		"updated_at":   g.UpdatedAt,
+		"id":            g.ID,
+		"source_id":     g.SourceID,
+		"name_en":       g.NameEN,
+		"name_local":    g.NameLocal,
+		"display_name":  displayName,
+		"cover_url":     g.CoverURL,
+		"source_url":    g.SourceURL,
+		"options_num":   g.OptionsNum,
+		"updated_at":    g.UpdatedAt,
 		"trainer_count": len(trainers),
 	}
 
@@ -564,22 +779,22 @@ func (a *AppService) buildTrainerWithGameEntry(t *model.Trainer, g *model.Game, 
 	}
 
 	return map[string]interface{}{
-		"id":            t.ID,
-		"game_id":       t.GameID,
-		"game_name":     displayName,
-		"game_name_en":  g.NameEN,
-		"cover_url":     g.CoverURL,
-		"version":       t.Version,
-		"game_version":  t.GameVersion,
-		"download_url":  t.DownloadURL,
-		"file_size":     t.FileSize,
-		"file_name":     t.FileName,
+		"id":             t.ID,
+		"game_id":        t.GameID,
+		"game_name":      displayName,
+		"game_name_en":   g.NameEN,
+		"cover_url":      g.CoverURL,
+		"version":        t.Version,
+		"game_version":   t.GameVersion,
+		"download_url":   t.DownloadURL,
+		"file_size":      t.FileSize,
+		"file_name":      t.FileName,
 		"download_count": t.DownloadCount,
-		"source_hash":   t.SourceHash,
-		"updated_at":    t.UpdatedAt,
-		"status":        int(s.Status),
-		"local_path":    s.LocalPath,
-		"installed_at":  s.InstalledAt,
-		"launched_at":   s.LaunchedAt,
+		"source_hash":    t.SourceHash,
+		"updated_at":     t.UpdatedAt,
+		"status":         int(s.Status),
+		"local_path":     s.LocalPath,
+		"installed_at":   s.InstalledAt,
+		"launched_at":    s.LaunchedAt,
 	}
 }

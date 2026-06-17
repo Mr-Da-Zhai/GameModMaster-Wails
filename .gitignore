@@ -38,3 +38,5 @@ frontend/node_modules/
 frontend/dist/
 
 *.tsbuildinfo
+tmp_analyze/
+tmp_e2e/
