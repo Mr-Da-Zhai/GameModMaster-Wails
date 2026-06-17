@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, h, computed } from 'vue'
+import { onMounted, onUnmounted, ref, h, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   NDataTable,
@@ -11,6 +11,7 @@ import {
   NSpin,
   NEmpty,
   NSkeleton,
+  NProgress,
 } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
 import { RefreshOutline, CloudDownloadOutline } from '@vicons/ionicons5'
@@ -23,8 +24,17 @@ const searchValue = ref('')
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 
 onMounted(() => {
+  store.bindEvents()
   store.loadTrainers(1)
 })
+
+// When a refresh completes, reload the current page to pick up new data.
+watch(
+  () => store.refreshProgress.done,
+  (done) => {
+    if (done) store.onRefreshComplete()
+  }
+)
 
 function handleSearch(query: string) {
   searchValue.value = query
@@ -38,8 +48,10 @@ function handleRefresh() {
   store.refreshData()
 }
 
-function handleLoadData() {
-  store.refreshData()
+// First-run seeding uses the synchronous fetch so the empty state can be
+// populated without an extra round-trip.
+async function handleLoadData() {
+  await store.refreshDataSync()
 }
 
 function getStatusInfo(status: number): { label: string; type: 'default' | 'info' | 'success' } {
@@ -66,9 +78,25 @@ function formatFileSize(size: number): string {
   return `${(size / (1024 * 1024)).toFixed(1)}MB`
 }
 
+function formatSpeed(speed: number): string {
+  if (!speed) return '-'
+  if (speed < 1024) return `${Math.round(speed)}B/s`
+  if (speed < 1024 * 1024) return `${(speed / 1024).toFixed(1)}KB/s`
+  return `${(speed / (1024 * 1024)).toFixed(1)}MB/s`
+}
+
 function handleRowClick(row: GameEntry) {
   router.push({ name: 'detail', params: { id: row.id } })
 }
+
+// Refresh progress display: "page 2/3 · 10 games"
+const refreshStatus = computed(() => {
+  const p = store.refreshProgress
+  if (!p || !p.current) return ''
+  const gamesPart = p.games ? `${p.games} 游戏` : ''
+  const trainersPart = p.trainers ? `· ${p.trainers} 修改器` : ''
+  return `抓取中 ${p.current}/${p.total || 3} ${gamesPart} ${trainersPart}`.trim()
+})
 
 const columns: DataTableColumns<GameEntry> = [
   {
@@ -157,17 +185,30 @@ const columns: DataTableColumns<GameEntry> = [
   {
     title: '操作',
     key: 'actions',
-    width: 100,
+    width: 110,
     align: 'center',
     fixed: 'right',
     render(row) {
       const btnProps = { size: 'small' as const, tertiary: true }
+      const trainerId = row.latest_trainer?.id
+      const prog = trainerId != null ? store.downloadProgress[trainerId] : undefined
+      const downloading = !!prog && !prog.done
       if (row.status === 2 && row.latest_trainer) {
-        return h(NButton, { ...btnProps, type: 'success', onClick: (e: Event) => { e.stopPropagation(); store.launchTrainer(row.latest_trainer!.id) } }, { default: () => '启动' })
+        return h(NButton, { ...btnProps, type: 'success', disabled: downloading, onClick: (e: Event) => { e.stopPropagation(); store.launchTrainer(row.latest_trainer!.id) } }, { default: () => '启动' })
       } else if (row.status === 1 && row.latest_trainer) {
-        return h(NButton, { ...btnProps, type: 'info', onClick: (e: Event) => { e.stopPropagation(); store.installTrainer(row.latest_trainer!.id) } }, { default: () => '安装' })
+        return h(NButton, { ...btnProps, type: 'info', disabled: downloading, onClick: (e: Event) => { e.stopPropagation(); store.installTrainer(row.latest_trainer!.id) } }, { default: () => '安装' })
       } else if (row.latest_trainer) {
-        return h(NButton, { ...btnProps, type: 'primary', onClick: (e: Event) => { e.stopPropagation(); store.downloadTrainer(row.latest_trainer!.id) } }, { default: () => '下载' })
+        if (downloading && prog && prog.total && prog.downloaded != null) {
+          const pct = Math.min(100, Math.round((prog.downloaded / prog.total) * 100))
+          return h('span', { style: { fontSize: '12px', color: '#63e2b7' } }, `${pct}%`)
+        }
+        return h(NButton, {
+          ...btnProps,
+          type: 'primary',
+          loading: downloading,
+          disabled: downloading,
+          onClick: (e: Event) => { e.stopPropagation(); store.downloadTrainer(row.latest_trainer!.id) },
+        }, { default: () => '下载' })
       }
       return h('span', { style: { color: '#666' } }, '-')
     },
@@ -195,17 +236,31 @@ const isEmpty = computed(() => !store.loading && !store.refreshing && store.trai
         />
       </div>
       <div class="toolbar-right">
+        <span v-if="store.refreshing && refreshStatus" class="refresh-status">
+          {{ refreshStatus }}
+        </span>
         <NButton
           :loading="store.refreshing"
           quaternary
           circle
           @click="handleRefresh"
+          title="刷新数据"
         >
           <template #icon>
             <NIcon><RefreshOutline /></NIcon>
           </template>
         </NButton>
       </div>
+    </div>
+
+    <!-- Refresh progress bar -->
+    <div v-if="store.refreshing" class="refresh-bar">
+      <NProgress
+        type="line"
+        :percentage="Math.min(100, Math.round(((store.refreshProgress.current || 0) / (store.refreshProgress.total || 3)) * 100))"
+        :show-indicator="false"
+        status="info"
+      />
     </div>
 
     <!-- Loading skeleton -->
@@ -282,5 +337,17 @@ export default {
 
 .skeleton-wrapper {
   padding: 20px 0;
+}
+
+.refresh-status {
+  font-size: 12px;
+  color: #999;
+  margin-right: 8px;
+  white-space: nowrap;
+}
+
+.refresh-bar {
+  margin-bottom: 12px;
+  padding: 0 4px;
 }
 </style>

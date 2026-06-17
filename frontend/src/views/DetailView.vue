@@ -17,16 +17,19 @@ import {
 import type { DataTableColumns } from 'naive-ui'
 import { ArrowBackOutline, DownloadOutline, PlayOutline } from '@vicons/ionicons5'
 import * as AppService from '../../bindings/GameModMaster/appservice'
+import { useTrainerStore } from '../stores/trainer'
 import type { TrainerDetailResponse, TrainerDetail, GameDetail } from '../stores/trainer'
 
 const route = useRoute()
 const router = useRouter()
+const store = useTrainerStore()
 
 const loading = ref(false)
 const game = ref<GameDetail | null>(null)
 const trainers = ref<TrainerDetail[]>([])
 
 onMounted(() => {
+  store.bindEvents()
   loadDetail()
 })
 
@@ -151,20 +154,32 @@ const columns: DataTableColumns<TrainerDetail> = [
   {
     title: '操作',
     key: 'actions',
-    width: 100,
+    width: 110,
     align: 'center',
     fixed: 'right',
     render(row) {
       const btnProps = { size: 'small' as const, tertiary: true }
+      const prog = store.downloadProgress[row.id]
+      const downloading = !!prog && !prog.done
       if (row.status === 2) {
-        return h(NButton, { ...btnProps, type: 'success', onClick: () => handleLaunch(row.id) }, {
+        return h(NButton, { ...btnProps, type: 'success', disabled: downloading, onClick: () => handleLaunch(row.id) }, {
           icon: () => h(NIcon, null, { default: () => h(PlayOutline) }),
           default: () => '启动',
         })
       } else if (row.status === 1) {
-        return h(NButton, { ...btnProps, type: 'info', onClick: () => handleInstall(row.id) }, { default: () => '安装' })
+        return h(NButton, { ...btnProps, type: 'info', disabled: downloading, onClick: () => handleInstall(row.id) }, { default: () => '安装' })
       }
-      return h(NButton, { ...btnProps, type: 'primary', onClick: () => handleDownload(row.id) }, {
+      if (downloading && prog && prog.total && prog.downloaded != null) {
+        const pct = Math.min(100, Math.round((prog.downloaded / prog.total) * 100))
+        return h('span', { style: { fontSize: '12px', color: '#63e2b7' } }, `${pct}%`)
+      }
+      return h(NButton, {
+        ...btnProps,
+        type: 'primary',
+        loading: downloading,
+        disabled: downloading,
+        onClick: () => handleDownload(row.id),
+      }, {
         icon: () => h(NIcon, null, { default: () => h(DownloadOutline) }),
         default: () => '下载',
       })

@@ -12,6 +12,10 @@
 // @ts-ignore: Unused imports
 import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Create } from "@wailsio/runtime";
 
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as application$0 from "../github.com/wailsapp/wails/v3/pkg/application/models.js";
+
 /**
  * DeleteTrainer removes a downloaded/installed trainer.
  * @param {number} trainerID
@@ -23,6 +27,7 @@ export function DeleteTrainer(trainerID) {
 
 /**
  * DownloadTrainer downloads a trainer file.
+ * Runs synchronously; progress is emitted via the "download:progress" event.
  * @param {number} trainerID
  * @returns {$CancellablePromise<void>}
  */
@@ -59,6 +64,22 @@ export function GetInstalledTrainers() {
 }
 
 /**
+ * GetMappingCount returns the number of loaded name-mapping entries.
+ * @returns {$CancellablePromise<number>}
+ */
+export function GetMappingCount() {
+    return $Call.ByID(1087103351);
+}
+
+/**
+ * GetRefreshResult returns the human-readable result of the last refresh.
+ * @returns {$CancellablePromise<string>}
+ */
+export function GetRefreshResult() {
+    return $Call.ByID(1422973628);
+}
+
+/**
  * GetSettings returns app settings from kv_store.
  * @returns {$CancellablePromise<{ [_ in string]?: any }>}
  */
@@ -66,6 +87,14 @@ export function GetSettings() {
     return $Call.ByID(3018893939).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType0($result);
     }));
+}
+
+/**
+ * GetTotalGames returns the total number of games in the index.
+ * @returns {$CancellablePromise<number>}
+ */
+export function GetTotalGames() {
+    return $Call.ByID(1282712555);
 }
 
 /**
@@ -102,6 +131,14 @@ export function InstallTrainer(trainerID) {
 }
 
 /**
+ * IsRefreshing reports whether a refresh task is currently running.
+ * @returns {$CancellablePromise<boolean>}
+ */
+export function IsRefreshing() {
+    return $Call.ByID(129364187);
+}
+
+/**
  * LaunchTrainer launches an installed trainer executable.
  * @param {number} trainerID
  * @returns {$CancellablePromise<void>}
@@ -111,11 +148,22 @@ export function LaunchTrainer(trainerID) {
 }
 
 /**
- * RefreshData fetches latest data from flingtrainer.com and updates DB.
+ * RefreshData fetches latest data from flingtrainer.com asynchronously.
+ * It returns immediately; progress and completion are reported via the
+ * "refresh:progress" event. Use IsRefreshing() / GetRefreshResult() to poll.
  * @returns {$CancellablePromise<void>}
  */
 export function RefreshData() {
     return $Call.ByID(983148913);
+}
+
+/**
+ * RefreshDataSync fetches latest data synchronously and returns when done.
+ * Useful for first-run seeding or tests; prefer RefreshData from the UI.
+ * @returns {$CancellablePromise<string>}
+ */
+export function RefreshDataSync() {
+    return $Call.ByID(2242894894);
 }
 
 /**
@@ -139,20 +187,30 @@ export function SearchTrainers(query) {
 }
 
 /**
+ * SetDownloadDir configures the download directory and creates it if needed.
+ * @param {string} dir
+ * @returns {$CancellablePromise<void>}
+ */
+export function SetDownloadDir(dir) {
+    return $Call.ByID(1936248769, dir);
+}
+
+/**
+ * SetWindow stores a reference to the main window so the service can emit events.
+ * Called from main() after the window is created.
+ * @param {application$0.WebviewWindow | null} w
+ * @returns {$CancellablePromise<void>}
+ */
+export function SetWindow(w) {
+    return $Call.ByID(3141033926, w);
+}
+
+/**
  * Shutdown closes the database connection on app exit.
  * @returns {$CancellablePromise<void>}
  */
 export function Shutdown() {
     return $Call.ByID(780008012);
-}
-
-/**
- * Startup is called when the Wails app starts. It initializes the database,
- * repositories, services, and in-memory index.
- * @returns {$CancellablePromise<void>}
- */
-export function Startup() {
-    return $Call.ByID(2617913455);
 }
 
 // Private type creation functions
