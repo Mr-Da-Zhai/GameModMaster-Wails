@@ -102,9 +102,19 @@ func NewAppService(embeddedMapping []byte) *AppService {
 }
 
 // ServiceStartup is called by Wails once the application is running.
-// We capture the context for cancellation of long-running tasks.
+// We capture the context for cancellation of long-running tasks and kick off
+// the first-run data seeding if the database is empty.
 func (a *AppService) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
 	a.ctx = ctx
+
+	// First-run seeding: if the index is empty, fetch data in the background so
+	// the user never sees an empty home page with a manual "load" button.
+	if len(a.idx.GamesByID) == 0 && !a.IsRefreshing() {
+		log.Printf("[AppService] First run detected (empty DB) — seeding data in background")
+		// RefreshData launches a goroutine and returns immediately.
+		_ = a.RefreshData()
+	}
+
 	return nil
 }
 
@@ -130,31 +140,120 @@ func (a *AppService) Shutdown() {
 	}
 }
 
-// resolveDataDir sets the data directory:
-// - Beside the executable if writable
-// - Otherwise under os.UserConfigDir()
+// resolveDataDir sets the data directory to a stable, user-scoped location
+// that is NOT beside the executable (which could be on the Desktop and easily
+// deleted together with the app).
+//
+//   - Windows: %LOCALAPPDATA%\GameModMaster  (e.g. C:\Users\<u>\AppData\Local\GameModMaster)
+//   - macOS:   ~/Library/Application Support/GameModMaster
+//   - Linux:   $XDG_DATA_HOME/GameModMaster  (defaults to ~/.local/share/GameModMaster)
+//
+// If a legacy `data/` directory exists beside the executable (older builds
+// stored the DB there), its contents are migrated into the new location once.
 func (a *AppService) resolveDataDir() {
-	// Try beside executable first
-	exePath, err := os.Executable()
-	if err == nil {
-		exeDir := filepath.Dir(exePath)
-		candidate := filepath.Join(exeDir, "data")
-		// Check if we can write to the exe directory
-		testFile := filepath.Join(exeDir, ".gamm_write_test")
-		if f, err := os.Create(testFile); err == nil {
-			f.Close()
-			os.Remove(testFile)
-			a.dataDir = candidate
-			return
-		}
+	a.dataDir = userAppDataDir()
+
+	if err := os.MkdirAll(a.dataDir, 0755); err != nil {
+		log.Printf("[AppService] Warning: could not create data dir %s: %v", a.dataDir, err)
 	}
 
-	// Fallback to user config directory
-	configDir, err := os.UserConfigDir()
-	if err != nil {
-		configDir = "."
+	// One-time migration from the old beside-exe `data/` location.
+	a.migrateLegacyDataDir()
+}
+
+// userAppDataDir returns the platform-appropriate, user-scoped data directory.
+// Falls back to the current working directory only if nothing else works.
+func userAppDataDir() string {
+	// os.UserConfigDir gives Roaming on Windows; we prefer LocalAppData so the
+	// (potentially large) DB and downloads don't roam across machines.
+	if runtime.GOOS == "windows" {
+		if local := os.Getenv("LocalAppData"); local != "" {
+			return filepath.Join(local, "GameModMaster")
+		}
 	}
-	a.dataDir = filepath.Join(configDir, "GameModMaster", "data")
+	if cfg, err := os.UserConfigDir(); err == nil && cfg != "" {
+		return filepath.Join(cfg, "GameModMaster")
+	}
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		return filepath.Join(home, ".GameModMaster")
+	}
+	return filepath.Join(".", "GameModMaster")
+}
+
+// migrateLegacyDataDir moves gamm.db (+ downloads) from beside the executable
+// into the new user-scoped location, so upgrades don't lose old data and the
+// Desktop stays clean. Best-effort: failures are logged, not fatal.
+func (a *AppService) migrateLegacyDataDir() {
+	exePath, err := os.Executable()
+	if err != nil {
+		return
+	}
+	legacyDir := filepath.Join(filepath.Dir(exePath), "data")
+	info, err := os.Stat(legacyDir)
+	if err != nil || !info.IsDir() {
+		return // nothing to migrate
+	}
+
+	log.Printf("[AppService] Migrating legacy data from %s -> %s", legacyDir, a.dataDir)
+
+	entries, err := os.ReadDir(legacyDir)
+	if err != nil {
+		log.Printf("[AppService] read legacy dir failed: %v", err)
+		return
+	}
+
+	for _, e := range entries {
+		src := filepath.Join(legacyDir, e.Name())
+		dst := filepath.Join(a.dataDir, e.Name())
+
+		// Don't overwrite an existing, newer file in the destination.
+		if _, err := os.Stat(dst); err == nil {
+			continue
+		}
+
+		if err := os.Rename(src, dst); err != nil {
+			// Rename can fail across volumes (e.g. Desktop on a different drive
+			// than LocalAppData). Fall back to copy + remove for the DB file.
+			if copyErr := copyFile(src, dst); copyErr != nil {
+				log.Printf("[AppService] migrate %s failed: %v", e.Name(), copyErr)
+				continue
+			}
+			_ = os.Remove(src)
+		}
+		log.Printf("[AppService] migrated %s", e.Name())
+	}
+
+	// Remove the now-empty legacy dir (and its `downloads/` subdir) if possible.
+	_ = os.RemoveAll(legacyDir)
+}
+
+// copyFile copies a single file from src to dst (used as a Rename fallback).
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	buf := make([]byte, 32*1024)
+	for {
+		n, err := in.Read(buf)
+		if n > 0 {
+			if _, werr := out.Write(buf[:n]); werr != nil {
+				return werr
+			}
+		}
+		if err != nil {
+			break
+		}
+	}
+	return nil
 }
 
 // refreshIndex reloads the in-memory index from the database.
@@ -716,7 +815,7 @@ func (a *AppService) GetDataDir() string {
 
 // GetMappingCount returns the number of loaded name-mapping entries.
 func (a *AppService) GetMappingCount() int {
-	return len(a.mappingService.GetMapping())
+	return a.mappingService.Count()
 }
 
 // ===== Helper Methods =====

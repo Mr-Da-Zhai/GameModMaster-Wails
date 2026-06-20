@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, h, computed } from 'vue'
+import { onMounted, ref, h } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   NButton,
@@ -9,13 +9,10 @@ import {
   NSpin,
   NEmpty,
   NDataTable,
-  NDescriptions,
-  NDescriptionsItem,
-  NCard,
-  NSpace,
 } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
-import { ArrowBackOutline, DownloadOutline, PlayOutline } from '@vicons/ionicons5'
+import { useMessage } from 'naive-ui'
+import { ArrowBackOutline, DownloadOutline, PlayOutline, GameControllerOutline } from '@vicons/ionicons5'
 import * as AppService from '../../bindings/GameModMaster/appservice'
 import { useTrainerStore } from '../stores/trainer'
 import type { TrainerDetailResponse, TrainerDetail, GameDetail } from '../stores/trainer'
@@ -23,6 +20,7 @@ import type { TrainerDetailResponse, TrainerDetail, GameDetail } from '../stores
 const route = useRoute()
 const router = useRouter()
 const store = useTrainerStore()
+const message = useMessage()
 
 const loading = ref(false)
 const game = ref<GameDetail | null>(null)
@@ -46,6 +44,7 @@ async function loadDetail() {
     }
   } catch (e) {
     console.error('Failed to load trainer detail:', e)
+    message.error('加载详情失败')
   } finally {
     loading.value = false
   }
@@ -81,6 +80,7 @@ async function handleDownload(trainerId: number) {
     await loadDetail()
   } catch (e) {
     console.error('Failed to download trainer:', e)
+    message.error('下载失败')
   }
 }
 
@@ -90,6 +90,7 @@ async function handleInstall(trainerId: number) {
     await loadDetail()
   } catch (e) {
     console.error('Failed to install trainer:', e)
+    message.error('安装失败')
   }
 }
 
@@ -98,6 +99,7 @@ async function handleLaunch(trainerId: number) {
     await AppService.LaunchTrainer(trainerId)
   } catch (e) {
     console.error('Failed to launch trainer:', e)
+    message.error('启动失败')
   }
 }
 
@@ -105,9 +107,9 @@ const columns: DataTableColumns<TrainerDetail> = [
   {
     title: '修改器版本',
     key: 'version',
-    width: 120,
+    width: 130,
     render(row) {
-      return h('span', { style: { fontWeight: '500' } }, row.version || '-')
+      return h('span', { style: { fontWeight: '600', color: 'var(--text-1)' } }, row.version || '-')
     },
   },
   {
@@ -115,6 +117,9 @@ const columns: DataTableColumns<TrainerDetail> = [
     key: 'game_version',
     minWidth: 200,
     ellipsis: { tooltip: true },
+    render(row) {
+      return h('span', { style: { color: 'var(--text-2)' } }, row.game_version || '-')
+    },
   },
   {
     title: '大小',
@@ -122,7 +127,7 @@ const columns: DataTableColumns<TrainerDetail> = [
     width: 90,
     align: 'center',
     render(row) {
-      return formatFileSize(row.file_size)
+      return h('span', { style: { color: 'var(--text-3)', fontSize: '13px' } }, formatFileSize(row.file_size))
     },
   },
   {
@@ -131,6 +136,9 @@ const columns: DataTableColumns<TrainerDetail> = [
     width: 100,
     align: 'center',
     sorter: (a, b) => a.download_count - b.download_count,
+    render(row) {
+      return h('span', { style: { color: 'var(--text-3)', fontSize: '13px' } }, String(row.download_count))
+    },
   },
   {
     title: '更新时间',
@@ -138,7 +146,7 @@ const columns: DataTableColumns<TrainerDetail> = [
     width: 120,
     align: 'center',
     render(row) {
-      return h('span', { style: { color: '#999', fontSize: '13px' } }, formatDate(row.updated_at))
+      return h('span', { style: { color: 'var(--text-3)', fontSize: '13px' } }, formatDate(row.updated_at))
     },
   },
   {
@@ -148,7 +156,7 @@ const columns: DataTableColumns<TrainerDetail> = [
     align: 'center',
     render(row) {
       const info = getStatusInfo(row.status)
-      return h(NTag, { size: 'small', type: info.type, bordered: false }, { default: () => info.label })
+      return h(NTag, { size: 'small', type: info.type, bordered: false, round: true }, { default: () => info.label })
     },
   },
   {
@@ -158,7 +166,7 @@ const columns: DataTableColumns<TrainerDetail> = [
     align: 'center',
     fixed: 'right',
     render(row) {
-      const btnProps = { size: 'small' as const, tertiary: true }
+      const btnProps = { size: 'small' as const, secondary: true }
       const prog = store.downloadProgress[row.id]
       const downloading = !!prog && !prog.done
       if (row.status === 2) {
@@ -171,7 +179,7 @@ const columns: DataTableColumns<TrainerDetail> = [
       }
       if (downloading && prog && prog.total && prog.downloaded != null) {
         const pct = Math.min(100, Math.round((prog.downloaded / prog.total) * 100))
-        return h('span', { style: { fontSize: '12px', color: '#63e2b7' } }, `${pct}%`)
+        return h('span', { style: { fontSize: '12px', color: 'var(--accent)', fontWeight: '600' } }, `${pct}%`)
       }
       return h(NButton, {
         ...btnProps,
@@ -188,76 +196,76 @@ const columns: DataTableColumns<TrainerDetail> = [
 ]
 
 const rowKey = (row: TrainerDetail) => row.id
-const calcTableHeight = computed(() => window.innerHeight - 360)
 </script>
 
 <template>
   <div class="detail-view">
-    <NSpin :show="loading">
-      <!-- Back button -->
-      <NButton quaternary size="small" @click="router.back()" style="margin-bottom: 16px;">
-        <template #icon>
-          <NIcon><ArrowBackOutline /></NIcon>
-        </template>
-        返回
-      </NButton>
+    <NButton quaternary size="small" @click="router.back()" class="back-btn">
+      <template #icon>
+        <NIcon><ArrowBackOutline /></NIcon>
+      </template>
+      返回
+    </NButton>
 
+    <NSpin :show="loading">
       <NEmpty v-if="!loading && !game" description="未找到游戏信息" />
 
       <template v-if="game">
-        <!-- Game info card -->
-        <NCard size="small" style="margin-bottom: 16px;">
-          <div class="game-info">
-            <div class="game-cover">
-              <NImage
-                v-if="game.cover_url"
-                :src="game.cover_url"
-                width="80"
-                height="80"
-                object-fit="cover"
-                :preview-src="''"
-                :show-toolbar="false"
-                fallback-src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='80' height='80'><rect fill='%23334' width='80' height='80' rx='8'/></svg>"
-                style="border-radius: 8px;"
-              />
-              <div v-else class="cover-placeholder">80x80</div>
-            </div>
-            <div class="game-meta">
-              <h2 class="game-title">{{ game.display_name || game.name_en }}</h2>
-              <NDescriptions label-placement="left" :column="2" size="small">
-                <NDescriptionsItem label="英文名">{{ game.name_en || '-' }}</NDescriptionsItem>
-                <NDescriptionsItem label="选项数">{{ game.options_num || '-' }}</NDescriptionsItem>
-                <NDescriptionsItem label="来源">
-                  <a v-if="game.source_url" :href="game.source_url" target="_blank" style="color: #63e2b7;">查看原站</a>
-                  <span v-else>-</span>
-                </NDescriptionsItem>
-                <NDescriptionsItem label="更新">{{ formatDate(game.updated_at) }}</NDescriptionsItem>
-              </NDescriptions>
+        <!-- Game info -->
+        <div class="game-info-card">
+          <div class="game-cover">
+            <NImage
+              v-if="game.cover_url"
+              :src="game.cover_url"
+              width="96"
+              height="96"
+              object-fit="cover"
+              :preview-src="''"
+              :show-toolbar="false"
+              fallback-src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='96' height='96'><rect fill='%23334155' width='96' height='96' rx='14'/></svg>"
+              class="cover-img"
+            />
+            <div v-else class="cover-placeholder">
+              <NIcon size="32" color="#64748b"><GameControllerOutline /></NIcon>
             </div>
           </div>
-        </NCard>
+          <div class="game-meta">
+            <h1 class="game-title">{{ game.display_name || game.name_en }}</h1>
+            <div class="game-sub" v-if="game.name_local && game.name_local !== game.display_name">{{ game.name_en }}</div>
+            <div class="meta-row">
+              <span class="meta-item"><span class="meta-label">选项</span><span class="meta-val">{{ game.options_num || '-' }}</span></span>
+              <span class="meta-dot">·</span>
+              <span class="meta-item"><span class="meta-label">更新</span><span class="meta-val">{{ formatDate(game.updated_at) }}</span></span>
+              <a v-if="game.source_url" :href="game.source_url" target="_blank" class="source-link">查看原站 →</a>
+            </div>
+          </div>
+        </div>
 
-        <!-- Trainer versions table -->
-        <NCard size="small" title="修改器版本">
-          <NDataTable
-            :columns="columns"
-            :data="trainers"
-            :row-key="rowKey"
-            :max-height="calcTableHeight"
-            :bordered="false"
-            :single-line="false"
-            size="small"
-          />
-        </NCard>
+        <!-- Trainer versions -->
+        <div class="versions-card">
+          <div class="versions-head">
+            <h2 class="section-title">修改器版本</h2>
+            <span class="version-count">{{ trainers.length }} 个版本</span>
+          </div>
+          <div class="versions-table-wrap">
+            <NDataTable
+              :columns="columns"
+              :data="trainers"
+              :row-key="rowKey"
+              :max-height="360"
+              :bordered="false"
+              :single-line="false"
+              size="small"
+            />
+          </div>
+        </div>
       </template>
     </NSpin>
   </div>
 </template>
 
 <script lang="ts">
-export default {
-  name: 'DetailView',
-}
+export default { name: 'DetailView' }
 </script>
 
 <style scoped>
@@ -265,38 +273,117 @@ export default {
   display: flex;
   flex-direction: column;
   height: 100%;
-}
-
-.game-info {
-  display: flex;
+  min-height: 0;
   gap: 16px;
-  align-items: flex-start;
+}
+.back-btn {
+  align-self: flex-start;
 }
 
+.game-info-card {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  padding: 24px;
+  background: var(--surface-1);
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+}
 .game-cover {
   flex-shrink: 0;
 }
-
+.cover-img {
+  border-radius: 14px !important;
+}
 .cover-placeholder {
-  width: 80px;
-  height: 80px;
-  border-radius: 8px;
-  background: #334;
+  width: 96px;
+  height: 96px;
+  border-radius: 14px;
+  background: var(--surface-2);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #666;
-  font-size: 12px;
 }
-
 .game-meta {
   flex: 1;
   min-width: 0;
 }
-
 .game-title {
-  font-size: 18px;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-1);
+  margin: 0;
+  letter-spacing: 0.2px;
+}
+.game-sub {
+  font-size: 13px;
+  color: var(--text-3);
+  margin-top: 4px;
+}
+.meta-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+.meta-item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.meta-label {
+  font-size: 12px;
+  color: var(--text-3);
+}
+.meta-val {
+  font-size: 14px;
+  color: var(--text-1);
   font-weight: 600;
-  margin: 0 0 8px 0;
+}
+.meta-dot {
+  color: var(--text-3);
+}
+.source-link {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--accent);
+  text-decoration: none;
+}
+.source-link:hover {
+  text-decoration: underline;
+}
+
+.versions-card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-1);
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.versions-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px 12px;
+  flex-shrink: 0;
+}
+.section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-1);
+  margin: 0;
+}
+.version-count {
+  font-size: 12px;
+  color: var(--text-3);
+}
+.versions-table-wrap {
+  flex: 1;
+  min-height: 0;
+  padding: 0 8px 8px;
 }
 </style>

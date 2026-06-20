@@ -1,18 +1,14 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import {
-  NCard,
-  NDescriptions,
-  NDescriptionsItem,
   NButton,
   NIcon,
   NSpin,
   NSpace,
   NInput,
-  NPopconfirm,
   useMessage,
 } from 'naive-ui'
-import { FolderOpenOutline, RefreshOutline, TrashOutline } from '@vicons/ionicons5'
+import { FolderOpenOutline, RefreshOutline } from '@vicons/ionicons5'
 import * as AppService from '../../bindings/GameModMaster/appservice'
 import { Events } from '@wailsio/runtime'
 import { useTrainerStore } from '../stores/trainer'
@@ -28,11 +24,9 @@ const downloadDirInput = ref('')
 const editingDownloadDir = ref(false)
 const mappingCount = ref(0)
 const totalGames = ref(0)
-const settings = ref<Record<string, any>>({})
 
 onMounted(() => {
   loadSettings()
-  // Live-update stats after a refresh completes
   Events.On('refresh:progress', (ev: any) => {
     if (ev?.data?.done) loadSettings()
   })
@@ -48,13 +42,13 @@ async function loadSettings() {
       AppService.GetTotalGames(),
     ])
     dataDir.value = dir || ''
-    settings.value = s || {}
     downloadDir.value = s?.download_dir || `${dir}/downloads`
     downloadDirInput.value = downloadDir.value
     mappingCount.value = mCount || 0
     totalGames.value = games || 0
   } catch (e) {
     console.error('Failed to load settings:', e)
+    message.error('加载设置失败')
   } finally {
     loading.value = false
   }
@@ -104,9 +98,11 @@ async function saveDownloadDir() {
 
 <template>
   <div class="settings-view">
-    <div class="page-header">
-      <h2 class="page-title">设置</h2>
-      <NButton :loading="refreshing" @click="handleRefresh" size="small">
+    <div class="page-head">
+      <div class="page-head-left">
+        <h1 class="page-title">设置</h1>
+      </div>
+      <NButton :loading="refreshing" secondary @click="handleRefresh">
         <template #icon>
           <NIcon><RefreshOutline /></NIcon>
         </template>
@@ -115,59 +111,91 @@ async function saveDownloadDir() {
     </div>
 
     <NSpin :show="loading">
+      <!-- Storage section -->
+      <section class="card">
+        <header class="card-head">
+          <h2 class="card-title">存储</h2>
+          <span class="card-desc">数据保存在系统用户目录，不会跟随程序被删除</span>
+        </header>
+        <div class="kv-list">
+          <div class="kv">
+            <div class="kv-label">数据目录</div>
+            <div class="kv-value mono">{{ dataDir || '-' }}</div>
+          </div>
+          <div class="kv">
+            <div class="kv-label">下载路径</div>
+            <div class="kv-value">
+              <NSpace v-if="!editingDownloadDir" align="center" :wrap="false">
+                <span class="mono">{{ downloadDir || '-' }}</span>
+                <NButton size="tiny" quaternary @click="startEditDownloadDir">
+                  <template #icon><NIcon><FolderOpenOutline /></NIcon></template>
+                  修改
+                </NButton>
+              </NSpace>
+              <NSpace v-else align="center" :wrap="false">
+                <NInput
+                  v-model:value="downloadDirInput"
+                  size="small"
+                  style="width: 380px;"
+                  placeholder="输入下载目录绝对路径"
+                />
+                <NButton size="small" type="primary" @click="saveDownloadDir">保存</NButton>
+                <NButton size="small" @click="cancelEditDownloadDir">取消</NButton>
+              </NSpace>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- Data section -->
-      <NCard title="数据" size="small" style="margin-bottom: 16px;">
-        <NDescriptions label-placement="left" :column="1" bordered size="small">
-          <NDescriptionsItem label="数据目录">
-            <span style="font-family: monospace; font-size: 13px;">{{ dataDir || '-' }}</span>
-          </NDescriptionsItem>
-          <NDescriptionsItem label="下载路径">
-            <NSpace v-if="!editingDownloadDir" align="center" :wrap="false">
-              <span style="font-family: monospace; font-size: 13px;">{{ downloadDir || '-' }}</span>
-              <NButton size="tiny" quaternary @click="startEditDownloadDir">
-                <template #icon><NIcon><FolderOpenOutline /></NIcon></template>
-                修改
-              </NButton>
-            </NSpace>
-            <NSpace v-else align="center" :wrap="false">
-              <NInput
-                v-model:value="downloadDirInput"
-                size="small"
-                style="width: 380px;"
-                placeholder="输入下载目录绝对路径"
-              />
-              <NButton size="small" type="primary" @click="saveDownloadDir">保存</NButton>
-              <NButton size="small" @click="cancelEditDownloadDir">取消</NButton>
-            </NSpace>
-          </NDescriptionsItem>
-          <NDescriptionsItem label="名称映射">
-            {{ mappingCount > 0 ? `已加载 ${mappingCount} 条中英文名称映射` : '未加载' }}
-          </NDescriptionsItem>
-          <NDescriptionsItem label="本地数据">
-            {{ totalGames }} 个游戏
-          </NDescriptionsItem>
-        </NDescriptions>
-      </NCard>
+      <section class="card">
+        <header class="card-head">
+          <h2 class="card-title">数据统计</h2>
+        </header>
+        <div class="stat-grid">
+          <div class="stat">
+            <div class="stat-num">{{ totalGames }}</div>
+            <div class="stat-label">本地游戏数</div>
+          </div>
+          <div class="stat">
+            <div class="stat-num">{{ mappingCount }}</div>
+            <div class="stat-label">名称映射条目</div>
+          </div>
+        </div>
+      </section>
 
       <!-- About section -->
-      <NCard title="关于" size="small">
-        <NDescriptions label-placement="left" :column="1" bordered size="small">
-          <NDescriptionsItem label="应用名称">GameModMaster</NDescriptionsItem>
-          <NDescriptionsItem label="版本">1.0.0</NDescriptionsItem>
-          <NDescriptionsItem label="数据来源">
-            <a href="https://flingtrainer.com" target="_blank" style="color: #63e2b7;">FLiNG Trainer</a>
-          </NDescriptionsItem>
-          <NDescriptionsItem label="技术栈">Wails v3 + Go + Vue 3 + Naive UI</NDescriptionsItem>
-        </NDescriptions>
-      </NCard>
+      <section class="card">
+        <header class="card-head">
+          <h2 class="card-title">关于</h2>
+        </header>
+        <div class="kv-list">
+          <div class="kv">
+            <div class="kv-label">应用名称</div>
+            <div class="kv-value">GameModMaster</div>
+          </div>
+          <div class="kv">
+            <div class="kv-label">版本</div>
+            <div class="kv-value">1.0.0</div>
+          </div>
+          <div class="kv">
+            <div class="kv-label">数据来源</div>
+            <div class="kv-value">
+              <a href="https://flingtrainer.com" target="_blank" class="link">FLiNG Trainer ↗</a>
+            </div>
+          </div>
+          <div class="kv">
+            <div class="kv-label">技术栈</div>
+            <div class="kv-value">Wails v3 · Go · Vue 3 · Naive UI</div>
+          </div>
+        </div>
+      </section>
     </NSpin>
   </div>
 </template>
 
 <script lang="ts">
-export default {
-  name: 'SettingsView',
-}
+export default { name: 'SettingsView' }
 </script>
 
 <style scoped>
@@ -175,19 +203,111 @@ export default {
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-height: 0;
+  gap: 16px;
+  overflow-y: auto;
 }
 
-.page-header {
+.page-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
   flex-shrink: 0;
 }
-
+.page-head-left {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
 .page-title {
-  font-size: 18px;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-1);
+}
+
+.card {
+  background: var(--surface-1);
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.card-head {
+  padding: 18px 24px 12px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.card-title {
+  font-size: 15px;
   font-weight: 600;
+  color: var(--text-1);
   margin: 0;
+}
+.card-desc {
+  display: block;
+  font-size: 12px;
+  color: var(--text-3);
+  margin-top: 4px;
+}
+
+.kv-list {
+  padding: 8px 24px 20px;
+}
+.kv {
+  display: flex;
+  align-items: center;
+  padding: 14px 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.06);
+  gap: 16px;
+}
+.kv:last-child {
+  border-bottom: none;
+}
+.kv-label {
+  width: 120px;
+  flex-shrink: 0;
+  font-size: 13px;
+  color: var(--text-3);
+}
+.kv-value {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  color: var(--text-1);
+}
+.mono {
+  font-family: 'JetBrains Mono', 'Consolas', monospace;
+  font-size: 12.5px;
+  color: var(--text-2);
+  word-break: break-all;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  padding: 20px 24px;
+}
+.stat {
+  background: var(--surface-2);
+  border-radius: 12px;
+  padding: 18px 20px;
+}
+.stat-num {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1.2;
+}
+.stat-label {
+  font-size: 13px;
+  color: var(--text-3);
+  margin-top: 4px;
+}
+
+.link {
+  color: var(--accent);
+  text-decoration: none;
+}
+.link:hover {
+  text-decoration: underline;
 }
 </style>

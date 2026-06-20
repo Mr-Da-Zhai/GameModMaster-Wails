@@ -154,7 +154,9 @@ export const useTrainerStore = defineStore('trainer', () => {
       const result = await AppService.GetTrainers(page, pageSize.value)
       trainers.value = (result || []) as unknown as GameEntry[]
       currentPage.value = page
-      totalCount.value = trainers.value.length
+      // Real total for the pager (number of games in the DB), not just the
+      // size of the current page slice.
+      totalCount.value = await AppService.GetTotalGames()
     } catch (e) {
       console.error('Failed to load trainers:', e)
     } finally {
@@ -173,6 +175,7 @@ export const useTrainerStore = defineStore('trainer', () => {
       const result = await AppService.SearchTrainers(query)
       trainers.value = (result || []) as unknown as GameEntry[]
       currentPage.value = 1
+      // Search returns a capped slice; drive the pager off its length.
       totalCount.value = trainers.value.length
     } catch (e) {
       console.error('Failed to search trainers:', e)

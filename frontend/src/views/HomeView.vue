@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, h, computed, watch } from 'vue'
+import { onMounted, ref, h, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   NDataTable,
@@ -8,13 +8,11 @@ import {
   NTag,
   NIcon,
   NImage,
-  NSpin,
   NEmpty,
-  NSkeleton,
-  NProgress,
+  NPagination,
 } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
-import { RefreshOutline, CloudDownloadOutline } from '@vicons/ionicons5'
+import { RefreshOutline, CloudDownloadOutline, SearchOutline } from '@vicons/ionicons5'
 import { useTrainerStore, type GameEntry } from '../stores/trainer'
 
 const router = useRouter()
@@ -28,7 +26,7 @@ onMounted(() => {
   store.loadTrainers(1)
 })
 
-// When a refresh completes, reload the current page to pick up new data.
+// Auto-reload the list when an async refresh completes.
 watch(
   () => store.refreshProgress.done,
   (done) => {
@@ -48,10 +46,12 @@ function handleRefresh() {
   store.refreshData()
 }
 
-// First-run seeding uses the synchronous fetch so the empty state can be
-// populated without an extra round-trip.
 async function handleLoadData() {
   await store.refreshDataSync()
+}
+
+function handlePageChange(page: number) {
+  store.loadTrainers(page)
 }
 
 function getStatusInfo(status: number): { label: string; type: 'default' | 'info' | 'success' } {
@@ -78,18 +78,10 @@ function formatFileSize(size: number): string {
   return `${(size / (1024 * 1024)).toFixed(1)}MB`
 }
 
-function formatSpeed(speed: number): string {
-  if (!speed) return '-'
-  if (speed < 1024) return `${Math.round(speed)}B/s`
-  if (speed < 1024 * 1024) return `${(speed / 1024).toFixed(1)}KB/s`
-  return `${(speed / (1024 * 1024)).toFixed(1)}MB/s`
-}
-
 function handleRowClick(row: GameEntry) {
   router.push({ name: 'detail', params: { id: row.id } })
 }
 
-// Refresh progress display: "page 2/3 · 10 games"
 const refreshStatus = computed(() => {
   const p = store.refreshProgress
   if (!p || !p.current) return ''
@@ -100,56 +92,59 @@ const refreshStatus = computed(() => {
 
 const columns: DataTableColumns<GameEntry> = [
   {
-    title: '封面',
-    key: 'cover_url',
-    width: 56,
-    render(row) {
-      if (row.cover_url) {
-        return h(NImage, {
-          src: row.cover_url,
-          width: 40,
-          height: 40,
-          objectFit: 'cover',
-          style: { borderRadius: '4px' },
-          previewSrc: '',
-          showToolbar: false,
-          fallbackSrc: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect fill="%23334" width="40" height="40" rx="4"/></svg>',
-        })
-      }
-      return h('div', {
-        style: {
-          width: '40px',
-          height: '40px',
-          borderRadius: '4px',
-          background: '#334',
-          display: 'inline-block',
-        },
-      })
-    },
-  },
-  {
-    title: '游戏名称',
-    key: 'display_name',
-    minWidth: 200,
+    title: '游戏',
+    key: 'name',
+    minWidth: 280,
     ellipsis: { tooltip: true },
     render(row) {
-      return h('span', { style: { fontWeight: '500' } }, row.display_name || row.name_en || 'Unknown')
+      const children: any[] = []
+      if (row.cover_url) {
+        children.push(
+          h(NImage, {
+            src: row.cover_url,
+            width: 42,
+            height: 42,
+            objectFit: 'cover',
+            style: { borderRadius: '8px', flexShrink: '0' },
+            previewSrc: '',
+            showToolbar: false,
+            fallbackSrc: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="42" height="42"><rect fill="%23334155" width="42" height="42" rx="8"/></svg>',
+          })
+        )
+      } else {
+        children.push(
+          h('div', { style: { width: '42px', height: '42px', borderRadius: '8px', background: '#334155', flexShrink: '0' } })
+        )
+      }
+      const nameBox = h('div', { style: { display: 'flex', flexDirection: 'column', gap: '2px', minWidth: '0' } }, [
+        h('span', { style: { fontWeight: '600', color: 'var(--text-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, row.display_name || row.name_en || 'Unknown'),
+        row.name_local && row.name_local !== row.display_name
+          ? h('span', { style: { fontSize: '11px', color: 'var(--text-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, row.name_en)
+          : null,
+      ])
+      children.push(nameBox)
+      return h('div', { style: { display: 'flex', alignItems: 'center', gap: '12px' } }, children)
     },
   },
   {
-    title: '选项数',
+    title: '选项',
     key: 'options_num',
-    width: 80,
+    width: 70,
     align: 'center',
     sorter: (a, b) => a.options_num - b.options_num,
+    render(row) {
+      return row.options_num
+        ? h('span', { style: { color: 'var(--text-2)', fontWeight: '500' } }, `${row.options_num}`)
+        : h('span', { style: { color: 'var(--text-3)' } }, '-')
+    },
   },
   {
     title: '版本',
     key: 'version',
-    width: 100,
+    width: 110,
     ellipsis: { tooltip: true },
     render(row) {
-      return row.latest_trainer?.version || '-'
+      return h('span', { style: { color: 'var(--text-2)', fontSize: '13px' } }, row.latest_trainer?.version || '-')
     },
   },
   {
@@ -158,7 +153,7 @@ const columns: DataTableColumns<GameEntry> = [
     width: 90,
     align: 'center',
     render(row) {
-      return row.latest_trainer ? formatFileSize(row.latest_trainer.file_size) : '-'
+      return h('span', { style: { color: 'var(--text-3)', fontSize: '13px' } }, row.latest_trainer ? formatFileSize(row.latest_trainer.file_size) : '-')
     },
   },
   {
@@ -169,7 +164,7 @@ const columns: DataTableColumns<GameEntry> = [
     sorter: (a, b) => a.status - b.status,
     render(row) {
       const info = getStatusInfo(row.status)
-      return h(NTag, { size: 'small', type: info.type, bordered: false }, { default: () => info.label })
+      return h(NTag, { size: 'small', type: info.type, bordered: false, round: true }, { default: () => info.label })
     },
   },
   {
@@ -179,17 +174,17 @@ const columns: DataTableColumns<GameEntry> = [
     align: 'center',
     sorter: (a, b) => a.updated_at - b.updated_at,
     render(row) {
-      return h('span', { style: { color: '#999', fontSize: '13px' } }, formatDate(row.updated_at))
+      return h('span', { style: { color: 'var(--text-3)', fontSize: '13px' } }, formatDate(row.updated_at))
     },
   },
   {
     title: '操作',
     key: 'actions',
-    width: 110,
+    width: 96,
     align: 'center',
     fixed: 'right',
     render(row) {
-      const btnProps = { size: 'small' as const, tertiary: true }
+      const btnProps = { size: 'small' as const, secondary: true }
       const trainerId = row.latest_trainer?.id
       const prog = trainerId != null ? store.downloadProgress[trainerId] : undefined
       const downloading = !!prog && !prog.done
@@ -200,7 +195,7 @@ const columns: DataTableColumns<GameEntry> = [
       } else if (row.latest_trainer) {
         if (downloading && prog && prog.total && prog.downloaded != null) {
           const pct = Math.min(100, Math.round((prog.downloaded / prog.total) * 100))
-          return h('span', { style: { fontSize: '12px', color: '#63e2b7' } }, `${pct}%`)
+          return h('span', { style: { fontSize: '12px', color: 'var(--accent)', fontWeight: '600' } }, `${pct}%`)
         }
         return h(NButton, {
           ...btnProps,
@@ -210,32 +205,30 @@ const columns: DataTableColumns<GameEntry> = [
           onClick: (e: Event) => { e.stopPropagation(); store.downloadTrainer(row.latest_trainer!.id) },
         }, { default: () => '下载' })
       }
-      return h('span', { style: { color: '#666' } }, '-')
+      return h('span', { style: { color: 'var(--text-3)' } }, '-')
     },
   },
 ]
 
 const rowKey = (row: GameEntry) => row.id
 
-const calcTableHeight = computed(() => window.innerHeight - 140)
+// Total games drives the pager. When searching we show the result slice only.
+const totalForPager = computed(() => store.totalCount)
 
-const isEmpty = computed(() => !store.loading && !store.refreshing && store.trainers.length === 0)
+const isEmpty = computed(
+  () => !store.loading && !store.refreshing && store.trainers.length === 0
+)
 </script>
 
 <template>
   <div class="home-view">
-    <!-- Toolbar -->
-    <div class="toolbar">
-      <div class="toolbar-left">
-        <NInput
-          :value="searchValue"
-          placeholder="搜索游戏名称..."
-          clearable
-          style="width: 300px"
-          @update:value="handleSearch"
-        />
+    <!-- Page header -->
+    <div class="page-head">
+      <div class="page-head-left">
+        <h1 class="page-title">游戏列表</h1>
+        <span class="page-count">{{ store.totalCount }} 款游戏</span>
       </div>
-      <div class="toolbar-right">
+      <div class="page-head-right">
         <span v-if="store.refreshing && refreshStatus" class="refresh-status">
           {{ refreshStatus }}
         </span>
@@ -253,59 +246,72 @@ const isEmpty = computed(() => !store.loading && !store.refreshing && store.trai
       </div>
     </div>
 
-    <!-- Refresh progress bar -->
-    <div v-if="store.refreshing" class="refresh-bar">
-      <NProgress
-        type="line"
-        :percentage="Math.min(100, Math.round(((store.refreshProgress.current || 0) / (store.refreshProgress.total || 3)) * 100))"
-        :show-indicator="false"
-        status="info"
-      />
+    <!-- Toolbar -->
+    <div class="toolbar">
+      <NInput
+        :value="searchValue"
+        placeholder="搜索游戏名称（支持中英文）…"
+        clearable
+        size="medium"
+        class="search-input"
+        @update:value="handleSearch"
+      >
+        <template #prefix>
+          <NIcon :component="SearchOutline" class="search-icon" />
+        </template>
+      </NInput>
     </div>
 
-    <!-- Loading skeleton -->
-    <div v-if="store.loading && store.trainers.length === 0" class="skeleton-wrapper">
-      <NSkeleton text :repeat="8" />
-    </div>
+    <!-- Body: flex column; the table area grows to fill -->
+    <div class="table-area">
+      <!-- Empty state -->
+      <NEmpty
+        v-if="isEmpty"
+        description="正在从服务器获取数据，请稍候…"
+        class="empty-state"
+      >
+        <template #extra>
+          <NButton type="primary" :loading="store.refreshing" @click="handleLoadData">
+            <template #icon>
+              <NIcon><CloudDownloadOutline /></NIcon>
+            </template>
+            手动加载
+          </NButton>
+        </template>
+      </NEmpty>
 
-    <!-- Empty state -->
-    <NEmpty
-      v-else-if="isEmpty"
-      description="暂无数据，首次使用请加载数据"
-      style="padding-top: 80px;"
-    >
-      <template #extra>
-        <NButton type="primary" :loading="store.refreshing" @click="handleLoadData">
-          <template #icon>
-            <NIcon><CloudDownloadOutline /></NIcon>
-          </template>
-          加载数据
-        </NButton>
-      </template>
-    </NEmpty>
-
-    <!-- Table -->
-    <NSpin v-else :show="store.loading">
+      <!-- Table fills the available height via flex-height (responsive to resize) -->
       <NDataTable
+        v-else
         :columns="columns"
         :data="store.trainers"
         :row-key="rowKey"
-        :max-height="calcTableHeight"
+        flex-height
         :virtual-scroll="true"
         :bordered="false"
         :single-line="false"
         size="small"
-        style="cursor: pointer;"
+        class="data-table"
         :row-props="(row: GameEntry) => ({ onClick: () => handleRowClick(row) })"
       />
-    </NSpin>
+    </div>
+
+    <!-- Pagination -->
+    <div v-if="totalForPager > 0 && !isEmpty" class="pager">
+      <NPagination
+        :page="store.currentPage"
+        :item-count="totalForPager"
+        :page-size="store.pageSize"
+        :page-slot="7"
+        show-quick-jumper
+        @update:page="handlePageChange"
+      />
+    </div>
   </div>
 </template>
 
 <script lang="ts">
-export default {
-  name: 'HomeView',
-}
+export default { name: 'HomeView' }
 </script>
 
 <style scoped>
@@ -313,41 +319,82 @@ export default {
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-height: 0;
+  gap: 16px;
 }
 
-.toolbar {
+.page-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
   flex-shrink: 0;
 }
-
-.toolbar-left {
+.page-head-left {
   display: flex;
-  gap: 8px;
-  align-items: center;
+  align-items: baseline;
+  gap: 12px;
 }
-
-.toolbar-right {
+.page-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-1);
+  letter-spacing: 0.2px;
+}
+.page-count {
+  font-size: 13px;
+  color: var(--text-3);
+}
+.page-head-right {
   display: flex;
-  gap: 8px;
   align-items: center;
+  gap: 8px;
 }
-
-.skeleton-wrapper {
-  padding: 20px 0;
-}
-
 .refresh-status {
   font-size: 12px;
-  color: #999;
-  margin-right: 8px;
+  color: var(--accent);
   white-space: nowrap;
 }
 
-.refresh-bar {
-  margin-bottom: 12px;
-  padding: 0 4px;
+.toolbar {
+  flex-shrink: 0;
+}
+.search-input {
+  width: 100%;
+  max-width: 420px;
+}
+.search-icon {
+  color: var(--text-3);
+}
+
+.table-area {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-1);
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+/* NDataTable with flex-height needs a positioned, bounded parent */
+.data-table {
+  flex: 1;
+  min-height: 0;
+  cursor: pointer;
+}
+
+.empty-state {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pager {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+  padding-top: 4px;
 }
 </style>

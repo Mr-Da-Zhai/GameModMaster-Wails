@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, h } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { NLayout, NLayoutSider, NMenu, NIcon } from 'naive-ui'
 import type { MenuOption } from 'naive-ui'
@@ -23,19 +23,17 @@ function handleMenuUpdate(key: string) {
 }
 
 function renderIcon(icon: any) {
-  return () => h(NIcon, { size: 20 }, { default: () => h(icon) })
+  return () => h(NIcon, { size: 19 }, { default: () => h(icon) })
 }
-
-import { h } from 'vue'
 
 const menuOptions: MenuOption[] = [
   {
-    label: '首页',
+    label: '游戏列表',
     key: '/',
     icon: renderIcon(HomeOutline),
   },
   {
-    label: '已下载',
+    label: '我的修改器',
     key: '/downloads',
     icon: renderIcon(DownloadOutline),
   },
@@ -48,53 +46,131 @@ const menuOptions: MenuOption[] = [
 </script>
 
 <template>
-  <NLayout has-sider style="height: 100vh">
+  <NLayout has-sider class="app-shell">
     <NLayoutSider
       bordered
-      :width="180"
+      :width="208"
       :native-scrollbar="false"
-      content-style="padding-top: 16px;"
-      style="background-color: #162130;"
+      content-style="display:flex; flex-direction:column; height:100%;"
+      class="app-sider"
     >
-      <div class="logo">
-        <span class="logo-icon">🎮</span>
-        <span class="logo-text">GameModMaster</span>
+      <!-- Brand -->
+      <div class="brand">
+        <div class="brand-logo">
+          <span class="brand-emoji">🎮</span>
+        </div>
+        <div class="brand-text">
+          <div class="brand-name">ModMaster</div>
+          <div class="brand-sub">游戏修改器大师</div>
+        </div>
       </div>
-      <NMenu
-        :value="activeKey"
-        :options="menuOptions"
-        :inverted="true"
-        @update:value="handleMenuUpdate"
-      />
+
+      <!-- Nav -->
+      <div class="nav-wrap">
+        <NMenu
+          :value="activeKey"
+          :options="menuOptions"
+          :inverted="true"
+          @update:value="handleMenuUpdate"
+        />
+      </div>
+
+      <!-- Footer -->
+      <div class="sider-footer">
+        <div class="footer-dot"></div>
+        <span>数据源：FLiNG Trainer</span>
+      </div>
     </NLayoutSider>
-    <NLayout
-      :native-scrollbar="false"
-      content-style="padding: 20px;"
-      style="background-color: #1b2636;"
-    >
-      <router-view />
+
+    <NLayout class="app-main" :native-scrollbar="false">
+      <div class="main-inner">
+        <router-view />
+      </div>
     </NLayout>
   </NLayout>
 </template>
 
 <style scoped>
-.logo {
+.app-shell {
+  height: 100vh;
+}
+
+.app-sider {
+  background: linear-gradient(180deg, #131c2e 0%, #0f1729 100%) !important;
+  border-right: 1px solid var(--border) !important;
+}
+
+/* Brand area */
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 22px 18px 20px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+}
+.brand-logo {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 0 16px 24px;
+  background: linear-gradient(135deg, var(--accent) 0%, #0ea5e9 100%);
+  box-shadow: 0 6px 18px var(--accent-glow);
+  flex-shrink: 0;
 }
-
-.logo-icon {
-  font-size: 22px;
+.brand-emoji {
+  font-size: 20px;
 }
-
-.logo-text {
-  font-size: 15px;
+.brand-text {
+  min-width: 0;
+}
+.brand-name {
+  font-size: 16px;
   font-weight: 700;
-  color: #63e2b7;
-  letter-spacing: 0.5px;
-  white-space: nowrap;
+  color: var(--text-1);
+  letter-spacing: 0.3px;
+  line-height: 1.2;
+}
+.brand-sub {
+  font-size: 11px;
+  color: var(--text-3);
+  margin-top: 2px;
+}
+
+.nav-wrap {
+  flex: 1;
+  padding: 14px 12px;
+  overflow-y: auto;
+}
+
+.sider-footer {
+  padding: 14px 18px 18px;
+  border-top: 1px solid rgba(148, 163, 184, 0.08);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-3);
+}
+.footer-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+  flex-shrink: 0;
+}
+
+.app-main {
+  background: transparent !important;
+}
+
+.main-inner {
+  height: 100%;
+  padding: 24px 28px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0; /* allow children to shrink + scroll */
 }
 </style>
