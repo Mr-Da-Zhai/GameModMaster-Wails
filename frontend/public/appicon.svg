@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#2dd4bf"/>
+      <stop offset="100%" stop-color="#0ea5e9"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="56" fill="url(#bg)"/>
+  <!-- 游戏手柄 -->
+  <path d="M88 96h80a40 40 0 0 1 38 52l-10 34a18 18 0 0 1-34 2l-6-14a14 14 0 0 0-13-8h-26a14 14 0 0 0-13 8l-6 14a18 18 0 0 1-34-2L50 148A40 40 0 0 1 88 96z" fill="#0f172a" opacity="0.92"/>
+  <!-- 左摇杆 -->
+  <circle cx="92" cy="128" r="8" fill="#2dd4bf"/>
+  <!-- 右侧按钮 -->
+  <circle cx="156" cy="120" r="6" fill="#2dd4bf"/>
+  <circle cx="172" cy="136" r="6" fill="#2dd4bf"/>
+  <circle cx="140" cy="136" r="6" fill="#2dd4bf"/>
+  <circle cx="156" cy="152" r="6" fill="#2dd4bf"/>
+</svg>

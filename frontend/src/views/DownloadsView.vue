@@ -1,221 +1,122 @@
 <script setup lang="ts">
-import { onMounted, ref, h } from 'vue'
+import { onMounted, ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import {
-  NDataTable,
   NButton,
-  NTag,
   NIcon,
-  NImage,
+  NSpin,
   NEmpty,
+  useMessage,
 } from 'naive-ui'
-import type { DataTableColumns } from 'naive-ui'
-import { PlayOutline, TrashOutline } from '@vicons/ionicons5'
-import { useMessage } from 'naive-ui'
+import {
+  PlayOutline,
+  TrashOutline,
+  DownloadOutline,
+  CheckmarkCircle,
+} from '@vicons/ionicons5'
 import * as AppService from '../../bindings/GameModMaster/appservice'
 import type { DownloadedTrainer } from '../stores/trainer'
 
+const router = useRouter()
 const message = useMessage()
 const trainers = ref<DownloadedTrainer[]>([])
 const loading = ref(false)
 
-onMounted(() => {
-  loadDownloaded()
-})
+onMounted(() => loadDownloaded())
 
 async function loadDownloaded() {
   loading.value = true
   try {
     const result = await AppService.GetDownloadedTrainers()
-    trainers.value = (result || []) as unknown as DownloadedTrainer[]
+    const arr = result as unknown
+    trainers.value = Array.isArray(arr) ? (arr as DownloadedTrainer[]) : []
   } catch (e) {
-    console.error('Failed to load downloaded trainers:', e)
+    console.error('[loadDownloaded]', e)
     message.error('加载列表失败')
   } finally {
     loading.value = false
   }
 }
 
-async function handleLaunch(trainerId: number) {
+async function handleLaunch(id: number) {
   try {
-    await AppService.LaunchTrainer(trainerId)
+    await AppService.LaunchTrainer(id)
   } catch (e) {
-    console.error('Failed to launch trainer:', e)
+    console.error('[launch]', e)
     message.error('启动失败')
   }
 }
 
-async function handleDelete(trainerId: number) {
+async function handleDelete(id: number) {
   try {
-    await AppService.DeleteTrainer(trainerId)
+    await AppService.DeleteTrainer(id)
     await loadDownloaded()
     message.success('已删除')
   } catch (e) {
-    console.error('Failed to delete trainer:', e)
+    console.error('[delete]', e)
     message.error('删除失败')
   }
 }
 
-function getStatusInfo(status: number): { label: string; type: 'info' | 'success' } {
-  switch (status) {
-    case 2:
-      return { label: '已安装', type: 'success' }
-    default:
-      return { label: '已下载', type: 'info' }
-  }
+function openDetail(t: DownloadedTrainer) {
+  router.push({ name: 'detail', params: { id: t.game_id } })
 }
 
-function formatDate(timestamp: number): string {
-  if (!timestamp) return '-'
-  const d = new Date(timestamp * 1000)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
-function formatFileSize(size: number): string {
-  if (!size) return '-'
-  if (size < 1024) return `${size}B`
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)}KB`
-  return `${(size / (1024 * 1024)).toFixed(1)}MB`
-}
-
-const columns: DataTableColumns<DownloadedTrainer> = [
-  {
-    title: '游戏',
-    key: 'game_name',
-    minWidth: 280,
-    ellipsis: { tooltip: true },
-    render(row) {
-      const children: any[] = []
-      if (row.cover_url) {
-        children.push(
-          h(NImage, {
-            src: row.cover_url,
-            width: 42,
-            height: 42,
-            objectFit: 'cover',
-            style: { borderRadius: '8px', flexShrink: '0' },
-            previewSrc: '',
-            showToolbar: false,
-            fallbackSrc: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="42" height="42"><rect fill="%23334155" width="42" height="42" rx="8"/></svg>',
-          })
-        )
-      } else {
-        children.push(h('div', { style: { width: '42px', height: '42px', borderRadius: '8px', background: '#334155', flexShrink: '0' } }))
-      }
-      const nameBox = h('div', { style: { display: 'flex', flexDirection: 'column', gap: '2px', minWidth: '0' } }, [
-        h('span', { style: { fontWeight: '600', color: 'var(--text-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, row.game_name || row.game_name_en || 'Unknown'),
-        row.game_name_en && row.game_name_en !== row.game_name
-          ? h('span', { style: { fontSize: '11px', color: 'var(--text-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, row.game_name_en)
-          : null,
-      ])
-      children.push(nameBox)
-      return h('div', { style: { display: 'flex', alignItems: 'center', gap: '12px' } }, children)
-    },
-  },
-  {
-    title: '版本',
-    key: 'version',
-    width: 110,
-    ellipsis: { tooltip: true },
-    render(row) {
-      return h('span', { style: { color: 'var(--text-2)', fontSize: '13px' } }, row.version || '-')
-    },
-  },
-  {
-    title: '大小',
-    key: 'file_size',
-    width: 90,
-    align: 'center',
-    render(row) {
-      return h('span', { style: { color: 'var(--text-3)', fontSize: '13px' } }, formatFileSize(row.file_size))
-    },
-  },
-  {
-    title: '状态',
-    key: 'status',
-    width: 90,
-    align: 'center',
-    render(row) {
-      const info = getStatusInfo(row.status)
-      return h(NTag, { size: 'small', type: info.type, bordered: false, round: true }, { default: () => info.label })
-    },
-  },
-  {
-    title: '下载时间',
-    key: 'installed_at',
-    width: 120,
-    align: 'center',
-    render(row) {
-      const ts = row.installed_at || row.updated_at
-      return h('span', { style: { color: 'var(--text-3)', fontSize: '13px' } }, formatDate(ts))
-    },
-  },
-  {
-    title: '操作',
-    key: 'actions',
-    width: 130,
-    align: 'center',
-    fixed: 'right',
-    render(row) {
-      const buttons: any[] = []
-      if (row.status === 2) {
-        buttons.push(
-          h(NButton, {
-            size: 'small' as const,
-            secondary: true,
-            type: 'success',
-            onClick: (e: Event) => { e.stopPropagation(); handleLaunch(row.id) },
-          }, {
-            icon: () => h(NIcon, null, { default: () => h(PlayOutline) }),
-            default: () => '启动',
-          })
-        )
-      }
-      buttons.push(
-        h(NButton, {
-          size: 'small' as const,
-          secondary: true,
-          type: 'error',
-          onClick: (e: Event) => { e.stopPropagation(); handleDelete(row.id) },
-        }, {
-          icon: () => h(NIcon, null, { default: () => h(TrashOutline) }),
-          default: () => '删除',
-        })
-      )
-      return h('div', { style: { display: 'flex', justifyContent: 'center', gap: '6px' } }, buttons)
-    },
-  },
-]
-
-const rowKey = (row: DownloadedTrainer) => row.id
+const isEmpty = computed(() => !loading.value && trainers.value.length === 0)
 </script>
 
 <template>
-  <div class="downloads-view">
-    <div class="page-head">
-      <div class="page-head-left">
-        <h1 class="page-title">我的修改器</h1>
-        <span class="page-count">{{ trainers.length }} 个</span>
+  <div class="downloads">
+    <header class="head">
+      <div class="head-left">
+        <h1 class="title">我的修改器</h1>
+        <span class="count">{{ trainers.length }} 个</span>
       </div>
-    </div>
+    </header>
 
-    <div class="table-area">
-      <NEmpty
-        v-if="!loading && trainers.length === 0"
-        description="还没有下载任何修改器"
-        class="empty-state"
-      />
-      <NDataTable
-        v-else
-        :columns="columns"
-        :data="trainers"
-        :row-key="rowKey"
-        flex-height
-        :virtual-scroll="true"
-        :bordered="false"
-        :single-line="false"
-        size="small"
-        class="data-table"
-      />
+    <div class="grid-scroll">
+      <NSpin :show="loading">
+        <NEmpty v-if="isEmpty" description="还没有下载任何修改器" class="empty" />
+
+        <div v-else class="grid">
+          <article
+            v-for="t in trainers"
+            :key="t.id"
+            class="card"
+            @click="openDetail(t)"
+          >
+            <div class="cover">
+              <img
+                v-if="t.cover_url"
+                :src="t.cover_url"
+                :alt="t.game_name"
+                loading="lazy"
+                @error="(e) => (e.target as HTMLImageElement).style.display = 'none'"
+              />
+              <div v-if="!t.cover_url" class="cover-fallback">
+                <span>{{ (t.game_name || '?').slice(0, 2) }}</span>
+              </div>
+              <span :class="['status-badge', t.status === 2 ? 'badge-installed' : 'badge-downloaded']">
+                {{ t.status === 2 ? '已安装' : '已下载' }}
+              </span>
+              <div class="overlay">
+                <button v-if="t.status === 2" class="action-btn" @click.stop="handleLaunch(t.id)">
+                  <NIcon size="16"><PlayOutline /></NIcon><span>启动</span>
+                </button>
+                <button class="action-btn danger" @click.stop="handleDelete(t.id)">
+                  <NIcon size="16"><TrashOutline /></NIcon><span>删除</span>
+                </button>
+              </div>
+            </div>
+            <div class="info">
+              <div class="name" :title="t.game_name">{{ t.game_name || t.game_name_en }}</div>
+              <div class="meta">
+                <span>{{ t.version || '-' }}</span>
+              </div>
+            </div>
+          </article>
+        </div>
+      </NSpin>
     </div>
   </div>
 </template>
@@ -225,53 +126,154 @@ export default { name: 'DownloadsView' }
 </script>
 
 <style scoped>
-.downloads-view {
+.downloads {
   display: flex;
   flex-direction: column;
   height: 100%;
   min-height: 0;
   gap: 16px;
 }
-
-.page-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-shrink: 0;
-}
-.page-head-left {
+.head {
   display: flex;
   align-items: baseline;
   gap: 12px;
+  flex-shrink: 0;
 }
-.page-title {
+.title {
   font-size: 22px;
   font-weight: 700;
   color: var(--text-1);
 }
-.page-count {
+.count {
   font-size: 13px;
   color: var(--text-3);
 }
 
-.table-area {
+.grid-scroll {
   flex: 1;
   min-height: 0;
-  display: flex;
-  flex-direction: column;
-  background: var(--surface-1);
-  border: 1px solid var(--border-soft);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 18px;
+  padding-bottom: 8px;
+}
+
+.card {
+  cursor: pointer;
   border-radius: 12px;
   overflow: hidden;
+  background: var(--surface-1);
+  border: 1px solid var(--border-soft);
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
-.data-table {
-  flex: 1;
-  min-height: 0;
+.card:hover {
+  transform: translateY(-3px);
+  border-color: var(--accent);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
 }
-.empty-state {
-  flex: 1;
+.cover {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.cover-fallback {
+  width: 100%;
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-3);
+  background: linear-gradient(135deg, var(--surface-2), #1a2740);
+}
+.status-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 3px 9px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.badge-downloaded {
+  background: rgba(56, 189, 248, 0.85);
+  color: #0c2433;
+}
+.badge-installed {
+  background: rgba(52, 211, 153, 0.9);
+  color: #052e1e;
+}
+.overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(0deg, rgba(15, 23, 42, 0.92) 0%, rgba(15, 23, 42, 0.3) 50%, transparent 100%);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 10px;
+  padding-bottom: 14px;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+.card:hover .overlay {
+  opacity: 1;
+}
+.action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  border: none;
+  border-radius: 20px;
+  background: var(--accent);
+  color: #04201c;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+.action-btn:hover {
+  background: #5eead4;
+  transform: scale(1.05);
+}
+.action-btn.danger {
+  background: rgba(248, 113, 113, 0.9);
+  color: #2a0a0a;
+}
+.action-btn.danger:hover {
+  background: #fca5a5;
+}
+
+.info {
+  padding: 10px 12px 12px;
+}
+.name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.meta {
+  margin-top: 4px;
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+.empty {
+  padding: 80px 0;
 }
 </style>

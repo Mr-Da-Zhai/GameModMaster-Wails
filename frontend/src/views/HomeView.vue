@@ -1,18 +1,22 @@
 <script setup lang="ts">
-import { onMounted, ref, h, computed, watch } from 'vue'
+import { onMounted, ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
-  NDataTable,
   NInput,
   NButton,
-  NTag,
   NIcon,
-  NImage,
-  NEmpty,
   NPagination,
+  NSpin,
+  NEmpty,
 } from 'naive-ui'
-import type { DataTableColumns } from 'naive-ui'
-import { RefreshOutline, CloudDownloadOutline, SearchOutline } from '@vicons/ionicons5'
+import {
+  RefreshOutline,
+  CloudDownloadOutline,
+  SearchOutline,
+  DownloadOutline,
+  PlayOutline,
+  CheckmarkCircle,
+} from '@vicons/ionicons5'
 import { useTrainerStore, type GameEntry } from '../stores/trainer'
 
 const router = useRouter()
@@ -26,7 +30,6 @@ onMounted(() => {
   store.loadTrainers(1)
 })
 
-// Auto-reload the list when an async refresh completes.
 watch(
   () => store.refreshProgress.done,
   (done) => {
@@ -37,9 +40,7 @@ watch(
 function handleSearch(query: string) {
   searchValue.value = query
   if (searchTimer) clearTimeout(searchTimer)
-  searchTimer = setTimeout(() => {
-    store.searchTrainers(query)
-  }, 300)
+  searchTimer = setTimeout(() => store.searchTrainers(query), 300)
 }
 
 function handleRefresh() {
@@ -54,184 +55,76 @@ function handlePageChange(page: number) {
   store.loadTrainers(page)
 }
 
-function getStatusInfo(status: number): { label: string; type: 'default' | 'info' | 'success' } {
+function openDetail(row: GameEntry) {
+  router.push({ name: 'detail', params: { id: row.id } })
+}
+
+function statusBadge(status: number) {
   switch (status) {
     case 1:
-      return { label: '已下载', type: 'info' }
+      return { text: '已下载', cls: 'badge-downloaded' }
     case 2:
-      return { label: '已安装', type: 'success' }
+      return { text: '已安装', cls: 'badge-installed' }
     default:
-      return { label: '可用', type: 'default' }
+      return null
   }
 }
 
-function formatDate(timestamp: number): string {
-  if (!timestamp) return '-'
-  const d = new Date(timestamp * 1000)
-  return `${d.getMonth() + 1}/${d.getDate()}`
-}
-
-function formatFileSize(size: number): string {
-  if (!size) return '-'
-  if (size < 1024) return `${size}B`
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)}KB`
-  return `${(size / (1024 * 1024)).toFixed(1)}MB`
-}
-
-function handleRowClick(row: GameEntry) {
-  router.push({ name: 'detail', params: { id: row.id } })
+function formatDate(ts: number) {
+  if (!ts) return ''
+  const d = new Date(ts * 1000)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 const refreshStatus = computed(() => {
   const p = store.refreshProgress
   if (!p || !p.current) return ''
-  const gamesPart = p.games ? `${p.games} 游戏` : ''
-  const trainersPart = p.trainers ? `· ${p.trainers} 修改器` : ''
-  return `抓取中 ${p.current}/${p.total || 3} ${gamesPart} ${trainersPart}`.trim()
+  return `抓取中 ${p.current}/${p.total || 3} · ${p.games || 0} 游戏`
 })
-
-const columns: DataTableColumns<GameEntry> = [
-  {
-    title: '游戏',
-    key: 'name',
-    minWidth: 280,
-    ellipsis: { tooltip: true },
-    render(row) {
-      const children: any[] = []
-      if (row.cover_url) {
-        children.push(
-          h(NImage, {
-            src: row.cover_url,
-            width: 42,
-            height: 42,
-            objectFit: 'cover',
-            style: { borderRadius: '8px', flexShrink: '0' },
-            previewSrc: '',
-            showToolbar: false,
-            fallbackSrc: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="42" height="42"><rect fill="%23334155" width="42" height="42" rx="8"/></svg>',
-          })
-        )
-      } else {
-        children.push(
-          h('div', { style: { width: '42px', height: '42px', borderRadius: '8px', background: '#334155', flexShrink: '0' } })
-        )
-      }
-      const nameBox = h('div', { style: { display: 'flex', flexDirection: 'column', gap: '2px', minWidth: '0' } }, [
-        h('span', { style: { fontWeight: '600', color: 'var(--text-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, row.display_name || row.name_en || 'Unknown'),
-        row.name_local && row.name_local !== row.display_name
-          ? h('span', { style: { fontSize: '11px', color: 'var(--text-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, row.name_en)
-          : null,
-      ])
-      children.push(nameBox)
-      return h('div', { style: { display: 'flex', alignItems: 'center', gap: '12px' } }, children)
-    },
-  },
-  {
-    title: '选项',
-    key: 'options_num',
-    width: 70,
-    align: 'center',
-    sorter: (a, b) => a.options_num - b.options_num,
-    render(row) {
-      return row.options_num
-        ? h('span', { style: { color: 'var(--text-2)', fontWeight: '500' } }, `${row.options_num}`)
-        : h('span', { style: { color: 'var(--text-3)' } }, '-')
-    },
-  },
-  {
-    title: '版本',
-    key: 'version',
-    width: 110,
-    ellipsis: { tooltip: true },
-    render(row) {
-      return h('span', { style: { color: 'var(--text-2)', fontSize: '13px' } }, row.latest_trainer?.version || '-')
-    },
-  },
-  {
-    title: '大小',
-    key: 'file_size',
-    width: 90,
-    align: 'center',
-    render(row) {
-      return h('span', { style: { color: 'var(--text-3)', fontSize: '13px' } }, row.latest_trainer ? formatFileSize(row.latest_trainer.file_size) : '-')
-    },
-  },
-  {
-    title: '状态',
-    key: 'status',
-    width: 90,
-    align: 'center',
-    sorter: (a, b) => a.status - b.status,
-    render(row) {
-      const info = getStatusInfo(row.status)
-      return h(NTag, { size: 'small', type: info.type, bordered: false, round: true }, { default: () => info.label })
-    },
-  },
-  {
-    title: '更新',
-    key: 'updated_at',
-    width: 80,
-    align: 'center',
-    sorter: (a, b) => a.updated_at - b.updated_at,
-    render(row) {
-      return h('span', { style: { color: 'var(--text-3)', fontSize: '13px' } }, formatDate(row.updated_at))
-    },
-  },
-  {
-    title: '操作',
-    key: 'actions',
-    width: 96,
-    align: 'center',
-    fixed: 'right',
-    render(row) {
-      const btnProps = { size: 'small' as const, secondary: true }
-      const trainerId = row.latest_trainer?.id
-      const prog = trainerId != null ? store.downloadProgress[trainerId] : undefined
-      const downloading = !!prog && !prog.done
-      if (row.status === 2 && row.latest_trainer) {
-        return h(NButton, { ...btnProps, type: 'success', disabled: downloading, onClick: (e: Event) => { e.stopPropagation(); store.launchTrainer(row.latest_trainer!.id) } }, { default: () => '启动' })
-      } else if (row.status === 1 && row.latest_trainer) {
-        return h(NButton, { ...btnProps, type: 'info', disabled: downloading, onClick: (e: Event) => { e.stopPropagation(); store.installTrainer(row.latest_trainer!.id) } }, { default: () => '安装' })
-      } else if (row.latest_trainer) {
-        if (downloading && prog && prog.total && prog.downloaded != null) {
-          const pct = Math.min(100, Math.round((prog.downloaded / prog.total) * 100))
-          return h('span', { style: { fontSize: '12px', color: 'var(--accent)', fontWeight: '600' } }, `${pct}%`)
-        }
-        return h(NButton, {
-          ...btnProps,
-          type: 'primary',
-          loading: downloading,
-          disabled: downloading,
-          onClick: (e: Event) => { e.stopPropagation(); store.downloadTrainer(row.latest_trainer!.id) },
-        }, { default: () => '下载' })
-      }
-      return h('span', { style: { color: 'var(--text-3)' } }, '-')
-    },
-  },
-]
-
-const rowKey = (row: GameEntry) => row.id
-
-// Total games drives the pager. When searching we show the result slice only.
-const totalForPager = computed(() => store.totalCount)
 
 const isEmpty = computed(
   () => !store.loading && !store.refreshing && store.trainers.length === 0
 )
+
+function onCardAction(e: Event, row: GameEntry) {
+  e.stopPropagation()
+  const t = row.latest_trainer
+  if (!t) return
+  if (row.status === 2) store.launchTrainer(t.id)
+  else if (row.status === 1) store.installTrainer(t.id)
+  else store.downloadTrainer(t.id)
+}
+
+function actionLabel(status: number) {
+  if (status === 2) return '启动'
+  if (status === 1) return '安装'
+  return '下载'
+}
 </script>
 
 <template>
-  <div class="home-view">
-    <!-- Page header -->
-    <div class="page-head">
-      <div class="page-head-left">
-        <h1 class="page-title">游戏列表</h1>
-        <span class="page-count">{{ store.totalCount }} 款游戏</span>
-      </div>
-      <div class="page-head-right">
-        <span v-if="store.refreshing && refreshStatus" class="refresh-status">
-          {{ refreshStatus }}
+  <div class="home">
+    <!-- Header bar -->
+    <header class="head">
+      <div class="head-left">
+        <h1 class="title">游戏库</h1>
+        <span class="count">{{ store.totalCount }} 款</span>
+        <span v-if="store.refreshing && refreshStatus" class="refresh-tag">
+          <span class="dot pulse"></span>{{ refreshStatus }}
         </span>
+      </div>
+      <div class="head-right">
+        <NInput
+          :value="searchValue"
+          placeholder="搜索游戏…"
+          clearable
+          class="search"
+          @update:value="handleSearch"
+        >
+          <template #prefix>
+            <NIcon :component="SearchOutline" class="search-ic" />
+          </template>
+        </NInput>
         <NButton
           :loading="store.refreshing"
           quaternary
@@ -239,74 +132,95 @@ const isEmpty = computed(
           @click="handleRefresh"
           title="刷新数据"
         >
-          <template #icon>
-            <NIcon><RefreshOutline /></NIcon>
-          </template>
+          <template #icon><NIcon><RefreshOutline /></NIcon></template>
         </NButton>
       </div>
+    </header>
+
+    <!-- Error banner (never silently swallow failures) -->
+    <div v-if="store.lastError" class="error-bar">
+      <strong>⚠</strong> {{ store.lastError }}
     </div>
 
-    <!-- Toolbar -->
-    <div class="toolbar">
-      <NInput
-        :value="searchValue"
-        placeholder="搜索游戏名称（支持中英文）…"
-        clearable
-        size="medium"
-        class="search-input"
-        @update:value="handleSearch"
-      >
-        <template #prefix>
-          <NIcon :component="SearchOutline" class="search-icon" />
-        </template>
-      </NInput>
-    </div>
+    <!-- Card grid: CSS Grid auto-fills columns based on width.
+         Outer container scrolls; cards never collapse. -->
+    <div class="grid-scroll">
+      <NSpin :show="store.loading">
+        <NEmpty
+          v-if="isEmpty"
+          description="暂无游戏数据"
+          class="empty"
+        >
+          <template #extra>
+            <NButton type="primary" :loading="store.refreshing" @click="handleLoadData">
+              <template #icon><NIcon><CloudDownloadOutline /></NIcon></template>
+              立即加载
+            </NButton>
+          </template>
+        </NEmpty>
 
-    <!-- Body: flex column; the table area grows to fill -->
-    <div class="table-area">
-      <!-- Empty state -->
-      <NEmpty
-        v-if="isEmpty"
-        description="正在从服务器获取数据，请稍候…"
-        class="empty-state"
-      >
-        <template #extra>
-          <NButton type="primary" :loading="store.refreshing" @click="handleLoadData">
-            <template #icon>
-              <NIcon><CloudDownloadOutline /></NIcon>
-            </template>
-            手动加载
-          </NButton>
-        </template>
-      </NEmpty>
+        <div v-else class="grid">
+          <article
+            v-for="g in store.trainers"
+            :key="g.id"
+            class="card"
+            @click="openDetail(g)"
+          >
+            <div class="cover">
+              <img
+                v-if="g.cover_url"
+                :src="g.cover_url"
+                :alt="g.display_name"
+                loading="lazy"
+                @error="(e) => (e.target as HTMLImageElement).style.display = 'none'"
+              />
+              <div v-if="!g.cover_url" class="cover-fallback">
+                <span>{{ (g.display_name || g.name_en || '?').slice(0, 2) }}</span>
+              </div>
 
-      <!-- Table fills the available height via flex-height (responsive to resize) -->
-      <NDataTable
-        v-else
-        :columns="columns"
-        :data="store.trainers"
-        :row-key="rowKey"
-        flex-height
-        :virtual-scroll="true"
-        :bordered="false"
-        :single-line="false"
-        size="small"
-        class="data-table"
-        :row-props="(row: GameEntry) => ({ onClick: () => handleRowClick(row) })"
-      />
+              <!-- status badge -->
+              <span v-if="statusBadge(g.status)" :class="['status-badge', statusBadge(g.status)!.cls]">
+                {{ statusBadge(g.status)!.text }}
+              </span>
+
+              <!-- hover action overlay -->
+              <div class="overlay">
+                <button class="action-btn" @click="onCardAction($event, g)">
+                  <NIcon size="16">
+                    <PlayOutline v-if="g.status === 2" />
+                    <CheckmarkCircle v-else-if="g.status === 1" />
+                    <DownloadOutline v-else />
+                  </NIcon>
+                  <span>{{ actionLabel(g.status) }}</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="info">
+              <div class="name" :title="g.display_name || g.name_en">
+                {{ g.display_name || g.name_en || 'Unknown' }}
+              </div>
+              <div class="meta">
+                <span v-if="g.options_num">{{ g.options_num }} 项</span>
+                <span v-if="g.latest_trainer?.game_version" class="ver">{{ g.latest_trainer.game_version }}</span>
+              </div>
+            </div>
+          </article>
+        </div>
+      </NSpin>
     </div>
 
     <!-- Pagination -->
-    <div v-if="totalForPager > 0 && !isEmpty" class="pager">
+    <footer v-if="store.totalCount > 0 && !isEmpty" class="pager">
       <NPagination
         :page="store.currentPage"
-        :item-count="totalForPager"
+        :item-count="store.totalCount"
         :page-size="store.pageSize"
         :page-slot="7"
         show-quick-jumper
         @update:page="handlePageChange"
       />
-    </div>
+    </footer>
   </div>
 </template>
 
@@ -315,7 +229,7 @@ export default { name: 'HomeView' }
 </script>
 
 <style scoped>
-.home-view {
+.home {
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -323,72 +237,205 @@ export default { name: 'HomeView' }
   gap: 16px;
 }
 
-.page-head {
+.head {
   display: flex;
   justify-content: space-between;
   align-items: center;
   flex-shrink: 0;
+  gap: 16px;
 }
-.page-head-left {
+.head-left {
   display: flex;
   align-items: baseline;
   gap: 12px;
+  min-width: 0;
 }
-.page-title {
+.title {
   font-size: 22px;
   font-weight: 700;
   color: var(--text-1);
-  letter-spacing: 0.2px;
 }
-.page-count {
+.count {
   font-size: 13px;
   color: var(--text-3);
 }
-.page-head-right {
+.refresh-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--accent);
+}
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.pulse {
+  animation: pulse 1s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.head-right {
   display: flex;
   align-items: center;
   gap: 8px;
 }
-.refresh-status {
-  font-size: 12px;
-  color: var(--accent);
-  white-space: nowrap;
+.search {
+  width: 280px;
 }
-
-.toolbar {
-  flex-shrink: 0;
-}
-.search-input {
-  width: 100%;
-  max-width: 420px;
-}
-.search-icon {
+.search-ic {
   color: var(--text-3);
 }
 
-.table-area {
+.error-bar {
+  flex-shrink: 0;
+  background: rgba(248, 113, 113, 0.12);
+  border: 1px solid rgba(248, 113, 113, 0.4);
+  color: #fca5a5;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+/* Scrollable grid container — the real fix for layout collapse */
+.grid-scroll {
   flex: 1;
   min-height: 0;
-  display: flex;
-  flex-direction: column;
-  background: var(--surface-1);
-  border: 1px solid var(--border-soft);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+/* Auto-filling responsive grid: 5 cols on wide, fewer on narrow */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 18px;
+  padding-bottom: 8px;
+}
+
+.card {
+  cursor: pointer;
   border-radius: 12px;
   overflow: hidden;
+  background: var(--surface-1);
+  border: 1px solid var(--border-soft);
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.card:hover {
+  transform: translateY(-3px);
+  border-color: var(--accent);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
 }
 
-/* NDataTable with flex-height needs a positioned, bounded parent */
-.data-table {
-  flex: 1;
-  min-height: 0;
-  cursor: pointer;
+.cover {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  background: var(--surface-2);
+  overflow: hidden;
 }
-
-.empty-state {
-  flex: 1;
+.cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.cover-fallback {
+  width: 100%;
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-3);
+  background: linear-gradient(135deg, var(--surface-2), #1a2740);
+}
+
+.status-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 3px 9px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  backdrop-filter: blur(6px);
+}
+.badge-downloaded {
+  background: rgba(56, 189, 248, 0.85);
+  color: #0c2433;
+}
+.badge-installed {
+  background: rgba(52, 211, 153, 0.9);
+  color: #052e1e;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(0deg, rgba(15, 23, 42, 0.92) 0%, rgba(15, 23, 42, 0.3) 50%, transparent 100%);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 14px;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+.card:hover .overlay {
+  opacity: 1;
+}
+.action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  border: none;
+  border-radius: 20px;
+  background: var(--accent);
+  color: #04201c;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+.action-btn:hover {
+  background: #5eead4;
+  transform: scale(1.05);
+}
+
+.info {
+  padding: 10px 12px 12px;
+}
+.name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-1);
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.meta {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+.ver {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.empty {
+  padding: 80px 0;
 }
 
 .pager {

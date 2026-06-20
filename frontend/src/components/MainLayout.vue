@@ -168,9 +168,9 @@ const menuOptions: MenuOption[] = [
 
 .main-inner {
   height: 100%;
+  min-height: 0;
   padding: 24px 28px;
   display: flex;
   flex-direction: column;
-  min-height: 0; /* allow children to shrink + scroll */
 }
 </style>

@@ -43,7 +43,7 @@ export interface DownloadedTrainer {
   download_count: number
   source_hash: string
   updated_at: number
-  status: number // 1=已下载 2=已安装
+  status: number
   local_path: string
   installed_at: number
   launched_at: number
@@ -57,7 +57,7 @@ export interface TrainerDetail {
   game_version: string
   download_url: string
   file_size: number
-  file_name: string
+  file_name: number
   download_count: number
   source_hash: string
   updated_at: number
@@ -102,42 +102,57 @@ export interface DownloadProgress {
   done?: boolean
 }
 
+// Normalize whatever the binding returns into a plain array.
+// Wails bindings may wrap results; this guards against shape mismatches.
+function toArray(result: unknown): GameEntry[] {
+  if (!result) return []
+  if (Array.isArray(result)) return result as GameEntry[]
+  // Some wrappers expose the array under .data
+  const r = result as Record<string, unknown>
+  if (r && Array.isArray(r.data)) return r.data as GameEntry[]
+  return []
+}
+
 export const useTrainerStore = defineStore('trainer', () => {
   const trainers = ref<GameEntry[]>([])
   const loading = ref(false)
   const searchQuery = ref('')
   const currentPage = ref(1)
-  const pageSize = ref(50)
+  const pageSize = ref(60)
   const totalCount = ref(0)
   const refreshing = ref(false)
 
-  // Refresh progress tracked via the "refresh:progress" event.
+  // Last error surfaced to the UI (no longer swallowed in console only).
+  const lastError = ref('')
+
   const refreshProgress = ref<RefreshProgress>({})
   const refreshSummary = ref('')
 
-  // Per-trainer download progress tracked via the "download:progress" event.
   const downloadProgress = ref<Record<number, DownloadProgress>>({})
 
-  // Listen to progress events from the backend. Registered once.
   let listenersBound = false
   function bindEvents() {
     if (listenersBound) return
     listenersBound = true
     Events.On('refresh:progress', (ev: any) => {
-      const data = ev?.data as RefreshProgress | undefined
+      // ev.data may be the payload object directly, or an array of args.
+      const raw = ev?.data
+      const data: RefreshProgress = Array.isArray(raw) ? raw[0] : raw
       if (!data) return
       refreshProgress.value = data
       if (data.done) {
         refreshing.value = false
         if (data.summary) refreshSummary.value = data.summary
+        // Auto-reload the visible list with freshly fetched data.
+        loadTrainers(currentPage.value)
       }
     })
     Events.On('download:progress', (ev: any) => {
-      const data = ev?.data as DownloadProgress | undefined
+      const raw = ev?.data
+      const data: DownloadProgress = Array.isArray(raw) ? raw[0] : raw
       if (!data || data.trainer_id == null) return
       downloadProgress.value = { ...downloadProgress.value, [data.trainer_id]: data }
       if (data.done) {
-        // Clear progress shortly after completion
         const id = data.trainer_id
         setTimeout(() => {
           const next = { ...downloadProgress.value }
@@ -150,15 +165,16 @@ export const useTrainerStore = defineStore('trainer', () => {
 
   async function loadTrainers(page: number = 1) {
     loading.value = true
+    lastError.value = ''
     try {
       const result = await AppService.GetTrainers(page, pageSize.value)
-      trainers.value = (result || []) as unknown as GameEntry[]
+      trainers.value = toArray(result)
       currentPage.value = page
-      // Real total for the pager (number of games in the DB), not just the
-      // size of the current page slice.
       totalCount.value = await AppService.GetTotalGames()
     } catch (e) {
-      console.error('Failed to load trainers:', e)
+      lastError.value = `加载列表失败: ${String(e)}`
+      // eslint-disable-next-line no-console
+      console.error('[loadTrainers]', e)
     } finally {
       loading.value = false
     }
@@ -170,92 +186,105 @@ export const useTrainerStore = defineStore('trainer', () => {
       return
     }
     loading.value = true
+    lastError.value = ''
     searchQuery.value = query
     try {
       const result = await AppService.SearchTrainers(query)
-      trainers.value = (result || []) as unknown as GameEntry[]
+      trainers.value = toArray(result)
       currentPage.value = 1
-      // Search returns a capped slice; drive the pager off its length.
       totalCount.value = trainers.value.length
     } catch (e) {
-      console.error('Failed to search trainers:', e)
+      lastError.value = `搜索失败: ${String(e)}`
+      // eslint-disable-next-line no-console
+      console.error('[searchTrainers]', e)
     } finally {
       loading.value = false
     }
   }
 
-  // RefreshData is now async on the backend: it returns immediately and
-  // reports progress via the "refresh:progress" event. We auto-reload the
-  // list when the event signals completion.
   async function refreshData() {
     bindEvents()
     if (refreshing.value) return
     refreshing.value = true
     refreshProgress.value = {}
     refreshSummary.value = ''
+    lastError.value = ''
     try {
       await AppService.RefreshData()
-      // Completion is handled by the event listener above; this reloads data.
     } catch (e) {
-      console.error('Failed to refresh data:', e)
+      lastError.value = `刷新失败: ${String(e)}`
       refreshing.value = false
+      // eslint-disable-next-line no-console
+      console.error('[refreshData]', e)
     }
   }
 
-  // Synchronous refresh (blocks until done). Used for first-run seeding.
   async function refreshDataSync() {
     bindEvents()
     refreshing.value = true
+    lastError.value = ''
     try {
-      const summary = await AppService.RefreshDataSync() as unknown as string
-      refreshSummary.value = summary || ''
+      const summary = await AppService.RefreshDataSync()
+      refreshSummary.value = (summary as unknown as string) || ''
       await loadTrainers(currentPage.value)
     } catch (e) {
-      console.error('Failed to refresh data (sync):', e)
+      lastError.value = `刷新失败: ${String(e)}`
+      // eslint-disable-next-line no-console
+      console.error('[refreshDataSync]', e)
     } finally {
       refreshing.value = false
     }
   }
 
-  // Called by the UI when the refresh:progress event reports done, to refresh
-  // the visible list with the newly-fetched data.
   async function onRefreshComplete() {
     await loadTrainers(currentPage.value)
   }
 
   async function downloadTrainer(trainerId: number) {
     bindEvents()
+    lastError.value = ''
     try {
       await AppService.DownloadTrainer(trainerId)
       await loadTrainers(currentPage.value)
     } catch (e) {
-      console.error('Failed to download trainer:', e)
+      lastError.value = `下载失败: ${String(e)}`
+      // eslint-disable-next-line no-console
+      console.error('[downloadTrainer]', e)
     }
   }
 
   async function installTrainer(trainerId: number) {
+    lastError.value = ''
     try {
       await AppService.InstallTrainer(trainerId)
       await loadTrainers(currentPage.value)
     } catch (e) {
-      console.error('Failed to install trainer:', e)
+      lastError.value = `安装失败: ${String(e)}`
+      // eslint-disable-next-line no-console
+      console.error('[installTrainer]', e)
     }
   }
 
   async function launchTrainer(trainerId: number) {
+    lastError.value = ''
     try {
       await AppService.LaunchTrainer(trainerId)
     } catch (e) {
-      console.error('Failed to launch trainer:', e)
+      lastError.value = `启动失败: ${String(e)}`
+      // eslint-disable-next-line no-console
+      console.error('[launchTrainer]', e)
     }
   }
 
   async function deleteTrainer(trainerId: number) {
+    lastError.value = ''
     try {
       await AppService.DeleteTrainer(trainerId)
       await loadTrainers(currentPage.value)
     } catch (e) {
-      console.error('Failed to delete trainer:', e)
+      lastError.value = `删除失败: ${String(e)}`
+      // eslint-disable-next-line no-console
+      console.error('[deleteTrainer]', e)
     }
   }
 
@@ -270,6 +299,7 @@ export const useTrainerStore = defineStore('trainer', () => {
     refreshProgress,
     refreshSummary,
     downloadProgress,
+    lastError,
     loadTrainers,
     searchTrainers,
     refreshData,
