@@ -180,6 +180,86 @@ func (s *Scraper) SearchTrainers(query string) ([]*model.Game, error) {
 	return games, nil
 }
 
+// SearchRemote performs a live search against flingtrainer.com, resolving a
+// Chinese query to its English title first (FLiNG's site search is English
+// only). Each result game has its Chinese display name attached and is cached
+// to the local DB so subsequent detail lookups resolve quickly.
+//
+// Resolution order for a Chinese query:
+//  1. Look the query up in the name mapping (zh -> en / alias -> en).
+//  2. If several English candidates exist, query the site for each and merge.
+//  3. If nothing maps, fall back to the raw query (may still hit English).
+func (s *Scraper) SearchRemote(query string) ([]*model.Game, error) {
+	q := strings.TrimSpace(query)
+	if q == "" {
+		return nil, nil
+	}
+
+	// Collect English search terms to try. Always include the raw query so an
+	// English input still works directly.
+	terms := []string{q}
+
+	// Expand a (possibly Chinese) query into English names via the mapping.
+	if s.mappingService != nil {
+		seen := map[string]bool{strings.ToLower(q): true}
+		for en := range s.mappingService.GetMapping() {
+			// en here is the lowercased english key
+			zh, _ := s.mappingService.Lookup(en)
+			zhLow := strings.ToLower(zh)
+			qLow := strings.ToLower(q)
+			if zh != "" && zh != en && (strings.Contains(zhLow, qLow) || strings.Contains(qLow, zhLow)) {
+				if !seen[strings.ToLower(en)] {
+					terms = append(terms, en)
+					seen[strings.ToLower(en)] = true
+				}
+			}
+		}
+		// Also check aliases (alias -> zh)
+		for alias, zh := range s.mappingService.GetAliases() {
+			aliasLow := strings.ToLower(alias)
+			zhLow := strings.ToLower(zh)
+			qLow := strings.ToLower(q)
+			if strings.Contains(aliasLow, qLow) || strings.Contains(zhLow, qLow) {
+				if !seen[aliasLow] {
+					terms = append(terms, alias)
+					seen[aliasLow] = true
+				}
+			}
+		}
+	}
+
+	// Cap the number of remote requests we make per search.
+	if len(terms) > 5 {
+		terms = terms[:5]
+	}
+
+	seenGames := map[string]bool{}
+	var merged []*model.Game
+
+	for _, term := range terms {
+		games, err := s.SearchTrainers(term)
+		if err != nil {
+			// One failed term shouldn't abort the whole search.
+			continue
+		}
+		for _, g := range games {
+			if g.SourceID == "" || seenGames[g.SourceID] {
+				continue
+			}
+			seenGames[g.SourceID] = true
+			merged = append(merged, g)
+		}
+	}
+
+	// Cache the freshly-found games so detail/download flows work without a
+	// re-fetch. Errors here are non-fatal.
+	if len(merged) > 0 {
+		_ = s.gameRepo.BatchUpsert(merged)
+	}
+
+	return merged, nil
+}
+
 // FetchAndSave fetches a list page, then crawls each game's detail page to
 // collect trainer versions, and persists everything to the DB.
 //

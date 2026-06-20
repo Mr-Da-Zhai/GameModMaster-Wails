@@ -40,7 +40,19 @@ watch(
 function handleSearch(query: string) {
   searchValue.value = query
   if (searchTimer) clearTimeout(searchTimer)
-  searchTimer = setTimeout(() => store.searchTrainers(query), 300)
+  // Remote search hits the network, so debounce a bit longer than a local
+  // lookup would, and clear immediately when the input is emptied.
+  if (!query.trim()) {
+    store.searchTrainers('')
+    return
+  }
+  searchTimer = setTimeout(() => store.searchTrainers(query), 500)
+}
+
+function handleSearchEnter() {
+  // Enter commits the search immediately instead of waiting for debounce.
+  if (searchTimer) clearTimeout(searchTimer)
+  if (searchValue.value.trim()) store.searchTrainers(searchValue.value)
 }
 
 function handleRefresh() {
@@ -116,10 +128,11 @@ function actionLabel(status: number) {
       <div class="head-center">
         <NInput
           :value="searchValue"
-          placeholder="搜索游戏名称（支持中英文）…"
+          placeholder="搜索游戏（中英文均可，联网搜索全部游戏）…"
           clearable
           class="search"
           @update:value="handleSearch"
+          @keyup.enter="handleSearchEnter"
         >
           <template #prefix>
             <NIcon :component="SearchOutline" class="search-ic" />

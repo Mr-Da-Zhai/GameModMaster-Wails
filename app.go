@@ -322,28 +322,67 @@ func (a *AppService) GetTotalGames() int {
 	return len(a.idx.GamesByID)
 }
 
-// SearchTrainers searches by query (Chinese or English).
+// SearchTrainers performs a LIVE search against flingtrainer.com.
+//
+// The local DB only caches a subset of games (whatever has been browsed or
+// downloaded), so searching it would miss most of the library. Instead we
+// always query the remote site: a Chinese query is first resolved to its
+// English title via the name mapping, then searched remotely. Results are
+// translated to Chinese display names, cached locally, and returned.
 func (a *AppService) SearchTrainers(query string) ([]map[string]interface{}, error) {
-	if query == "" {
+	q := strings.TrimSpace(query)
+	if q == "" {
 		return a.GetTrainers(1, 50)
 	}
 
-	games := a.idx.SearchGames(query, 50)
-	results := make([]map[string]interface{}, 0, len(games))
+	games, err := a.scraperService.SearchRemote(q)
+	if err != nil {
+		return nil, fmt.Errorf("remote search: %w", err)
+	}
 
+	// Rebuild the in-memory index so the freshly cached games are queryable
+	// (needed for detail/download flows that go through the index by ID).
+	a.refreshIndex()
+
+	results := make([]map[string]interface{}, 0, len(games))
 	for _, g := range games {
-		entry := a.buildGameEntry(g)
-		results = append(results, entry)
+		// Re-read from index to pick up the DB-assigned ID after upsert.
+		if stored := a.idx.GamesByNameEN[strings.ToLower(g.NameEN)]; stored != nil {
+			g = stored
+		}
+		results = append(results, a.buildGameEntry(g))
 	}
 
 	return results, nil
 }
 
 // GetTrainerDetail returns detail for a specific game (all trainer versions).
+//
+// If the game was discovered via a remote search it may have no trainer rows
+// cached yet (search only fetches the list, not each game's detail page). In
+// that case we lazily fetch and store the detail page on demand.
 func (a *AppService) GetTrainerDetail(gameID int32) (map[string]interface{}, error) {
 	g, ok := a.idx.GamesByID[gameID]
 	if !ok {
 		return nil, fmt.Errorf("game not found: %d", gameID)
+	}
+
+	// Lazy-load trainer details if none are cached for this game yet. This is
+	// the common path for games found through remote search.
+	if len(a.idx.GetTrainersForGame(gameID)) == 0 && g.SourceURL != "" {
+		if page, err := a.scraperService.FetchDetailPage(g.SourceURL); err == nil {
+			var toSave []*model.Trainer
+			for _, t := range page.Trainers {
+				t.GameID = g.ID
+				toSave = append(toSave, t)
+			}
+			if len(toSave) > 0 {
+				_ = a.trainerRepo.BatchUpsert(toSave)
+			}
+			a.refreshIndex()
+			// Re-resolve the game pointer after index refresh.
+			g = a.idx.GamesByID[gameID]
+		}
 	}
 
 	trainers := a.idx.GetTrainersForGame(gameID)
