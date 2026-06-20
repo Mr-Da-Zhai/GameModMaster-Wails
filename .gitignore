@@ -32,7 +32,8 @@ coverage
 
 # Wails build output
 build/bin/
-# Generated syso resources (rebuilt by `wails3 generate syso`)
+# Generated syso resources (rebuilt by `go-winres` / `wails3 generate syso`)
+*.syso
 wails_windows_*.syso
 
 # Frontend

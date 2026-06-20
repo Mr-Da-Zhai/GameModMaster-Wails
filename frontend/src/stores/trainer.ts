@@ -131,6 +131,9 @@ export const useTrainerStore = defineStore('trainer', () => {
   const downloadProgress = ref<Record<number, DownloadProgress>>({})
 
   let listenersBound = false
+  // Reload the home grid every N pages during a crawl so games appear
+  // incrementally instead of the list staying empty for minutes.
+  let lastReloadedAt = 0
   function bindEvents() {
     if (listenersBound) return
     listenersBound = true
@@ -145,6 +148,12 @@ export const useTrainerStore = defineStore('trainer', () => {
         if (data.summary) refreshSummary.value = data.summary
         // Auto-reload the visible list with freshly fetched data.
         loadTrainers(currentPage.value)
+        lastReloadedAt = data.current || 0
+      } else if (data.current && data.current - lastReloadedAt >= 5) {
+        // Incremental reload while crawling (the backend rebuilds the index
+        // every 5 pages, so this picks up the newly-stored games).
+        loadTrainers(currentPage.value)
+        lastReloadedAt = data.current
       }
     })
     Events.On('download:progress', (ev: any) => {

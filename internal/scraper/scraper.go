@@ -90,6 +90,57 @@ func (s *Scraper) FetchListPage(page int) ([]*model.Game, error) {
 	return games, nil
 }
 
+// CountTotalPages probes flingtrainer.com to determine the last list page.
+// It does a binary search over page numbers: a page counts as "existing" only
+// if it yields any real <article class="post-standard"> game entries. Returns
+// the highest such page number (minimum 1).
+func (s *Scraper) CountTotalPages() (int, error) {
+	// Fast probe: try a high upper bound first to anchor the search.
+	hasPage := func(p int) (bool, error) {
+		url := baseURL + "/"
+		if p > 1 {
+			url = fmt.Sprintf("%s/page/%d/", baseURL, p)
+		}
+		html, err := s.FetchPage(url)
+		if err != nil {
+			return false, err
+		}
+		return strings.Contains(html, "post-standard"), nil
+	}
+
+	// Find an upper bound that no longer exists.
+	lo, hi := 1, 8
+	for {
+		ok, err := hasPage(hi)
+		if err != nil {
+			return lo, nil // be tolerant: return what we know
+		}
+		if !ok {
+			break
+		}
+		lo = hi
+		hi *= 2
+		if hi > 256 {
+			break
+		}
+	}
+
+	// Binary search the last existing page in (lo, hi].
+	for lo+1 < hi {
+		mid := (lo + hi) / 2
+		ok, err := hasPage(mid)
+		if err != nil {
+			break
+		}
+		if ok {
+			lo = mid
+		} else {
+			hi = mid
+		}
+	}
+	return lo, nil
+}
+
 // FetchDetailPage fetches and parses a detail page for a specific game.
 // It returns the parsed trainer versions (download table) plus page metadata.
 func (s *Scraper) FetchDetailPage(sourceURL string) (*TrainerPage, error) {
@@ -181,8 +232,9 @@ func (s *Scraper) FetchAndSave(page int) (int, int, error) {
 			allTrainers = append(allTrainers, t)
 		}
 
-		// Polite delay between detail requests.
-		time.Sleep(500 * time.Millisecond)
+		// Polite delay between detail requests (kept short so a full
+		// ~700-game crawl finishes in a reasonable time).
+		time.Sleep(150 * time.Millisecond)
 	}
 
 	if len(allTrainers) > 0 {

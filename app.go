@@ -627,6 +627,7 @@ func (a *AppService) RefreshData() error {
 
 // RefreshDataSync fetches latest data synchronously and returns when done.
 // Useful for first-run seeding or tests; prefer RefreshData from the UI.
+// Fetches ALL pages (full library) so search works for every FLiNG game.
 func (a *AppService) RefreshDataSync() (string, error) {
 	a.refreshMu.Lock()
 	if a.refreshing {
@@ -641,7 +642,8 @@ func (a *AppService) RefreshDataSync() (string, error) {
 		a.refreshMu.Unlock()
 	}()
 
-	return a.doFetch(1, 3)
+	// pageCount <= 0 means "fetch everything".
+	return a.doFetch(1, 0)
 }
 
 // runRefresh executes the fetch off the main goroutine.
@@ -652,11 +654,11 @@ func (a *AppService) runRefresh() {
 		a.refreshMu.Unlock()
 	}()
 
-	startPage, pageCount := 1, 3
-	summary, err := a.doFetch(startPage, pageCount)
+	// Always fetch the full library so search covers every game.
+	summary, err := a.doFetch(1, 0)
 	if err != nil {
 		log.Printf("[AppService] Refresh error: %v", err)
-		summary = fmt.Sprintf("%s (出错: %v)", summary, err)
+		summary = fmt.Sprintf("%s (部分出错: %v)", summary, err)
 	}
 	a.refreshMu.Lock()
 	a.refreshResult = summary
@@ -670,12 +672,34 @@ func (a *AppService) runRefresh() {
 }
 
 // doFetch performs the multi-page crawl with progress events.
+// pageCount <= 0 means "probe and fetch all pages".
 func (a *AppService) doFetch(startPage, pageCount int) (string, error) {
+	total := pageCount
+	if total <= 0 {
+		// Probe the site for the real last page once, up front.
+		probed, err := a.scraperService.CountTotalPages()
+		if err != nil {
+			log.Printf("[AppService] count pages failed: %v", err)
+			probed = 49 // sensible fallback
+		}
+		total = probed - startPage + 1
+		if total < 1 {
+			total = 1
+		}
+		log.Printf("[AppService] full crawl: %d pages", total)
+		// Tell the UI how many pages to expect.
+		a.emitEvent(EventRefreshProgress, map[string]interface{}{
+			"total":   total,
+			"current": 0,
+			"phase":   "probe",
+		})
+	}
+
 	totalGames := 0
 	totalTrainers := 0
 	var firstErr error
 
-	for i := 0; i < pageCount; i++ {
+	for i := 0; i < total; i++ {
 		page := startPage + i
 		games, trainers, err := a.scraperService.FetchAndSave(page)
 		totalGames += games
@@ -687,16 +711,23 @@ func (a *AppService) doFetch(startPage, pageCount int) (string, error) {
 			log.Printf("[AppService] page %d: %v", page, err)
 		}
 
+		// Emit progress on every page so the UI bar advances smoothly.
 		a.emitEvent(EventRefreshProgress, map[string]interface{}{
-			"page":      page,
-			"total":     pageCount,
-			"current":   i + 1,
-			"games":     totalGames,
-			"trainers":  totalTrainers,
+			"page":     page,
+			"total":    total,
+			"current":  i + 1,
+			"games":    totalGames,
+			"trainers": totalTrainers,
 		})
+
+		// Refresh the in-memory index periodically (every 5 pages) so the home
+		// grid populates incrementally instead of staying empty for minutes.
+		if (i+1)%5 == 0 {
+			a.refreshIndex()
+		}
 	}
 
-	// Rebuild index with new data
+	// Final rebuild with all new data
 	a.refreshIndex()
 
 	summary := fmt.Sprintf("已更新 %d 个游戏, %d 个修改器", totalGames, totalTrainers)
