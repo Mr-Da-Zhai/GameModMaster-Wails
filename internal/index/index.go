@@ -104,13 +104,22 @@ func (idx *Index) LoadNameMapping(mapping map[string]string, aliases map[string]
 	idx.AliasIndex = aliases
 }
 
-// SearchGames searches by query across name_en, name_local, and aliases
+// SearchGames searches by query across name_en, name_local, and aliases.
+//
+// The query is matched (case-insensitive, substring) against each game's
+// English name, localized (Chinese) name, and the alias index. The alias
+// index also lets a Chinese query resolve to the English name and vice-versa,
+// so typing e.g. "生化危机" finds "Resident Evil 4" even when the stored
+// name_local happens to differ. Results are de-duplicated and capped at limit.
 func (idx *Index) SearchGames(query string, limit int) []*model.Game {
-	q := strings.ToLower(query)
+	q := strings.ToLower(strings.TrimSpace(query))
+	if q == "" || limit <= 0 {
+		return nil
+	}
+
 	seen := make(map[int32]bool)
 	var results []*model.Game
 
-	// Helper to add a game if not already seen
 	addGame := func(g *model.Game) {
 		if g == nil || seen[g.ID] {
 			return
@@ -119,25 +128,53 @@ func (idx *Index) SearchGames(query string, limit int) []*model.Game {
 		results = append(results, g)
 	}
 
-	// Search through all games (already sorted by updated_at DESC from LoadFromDB)
+	// Expand the query: collect any English names whose alias/translation
+	// contains the query, so a Chinese query can still match games stored
+	// primarily by English name.
+	extraENKeys := map[string]bool{}
+	for aliasKey, zh := range idx.AliasIndex {
+		if strings.Contains(aliasKey, q) || strings.Contains(strings.ToLower(zh), q) {
+			extraENKeys[aliasKey] = true
+		}
+	}
+
 	for _, g := range idx.GamesByUpdated {
 		if len(results) >= limit {
 			break
 		}
-		if strings.Contains(strings.ToLower(g.NameEN), q) ||
-			strings.Contains(strings.ToLower(g.NameLocal), q) {
+		loEN := strings.ToLower(g.NameEN)
+		loLocal := strings.ToLower(g.NameLocal)
+
+		hit := strings.Contains(loEN, q) ||
+			strings.Contains(loLocal, q) ||
+			extraENKeys[loEN]
+
+		// Also: the query may be a Chinese alias whose English key (stored as
+		// name_en) we should match against.
+		if !hit {
+			for aliasKey := range extraENKeys {
+				if loEN == aliasKey {
+					hit = true
+					break
+				}
+			}
+		}
+
+		if hit {
 			addGame(g)
 		}
 	}
 
-	// Search through aliases if we haven't hit the limit
+	// Fall back to alias-driven lookup by Chinese name (reverse map).
 	if len(results) < limit {
-		for alias, nameZH := range idx.AliasIndex {
+		for aliasKey, zh := range idx.AliasIndex {
 			if len(results) >= limit {
 				break
 			}
-			if strings.Contains(strings.ToLower(alias), q) {
-				if g, ok := idx.GamesByNameLocal[strings.ToLower(nameZH)]; ok {
+			if strings.Contains(aliasKey, q) || strings.Contains(strings.ToLower(zh), q) {
+				if g, ok := idx.GamesByNameEN[aliasKey]; ok {
+					addGame(g)
+				} else if g, ok := idx.GamesByNameLocal[strings.ToLower(zh)]; ok {
 					addGame(g)
 				}
 			}

@@ -32,6 +32,8 @@ coverage
 
 # Wails build output
 build/bin/
+# Generated syso resources (rebuilt by `wails3 generate syso`)
+wails_windows_*.syso
 
 # Frontend
 frontend/node_modules/

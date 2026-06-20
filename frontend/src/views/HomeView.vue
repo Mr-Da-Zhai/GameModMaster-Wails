@@ -113,10 +113,10 @@ function actionLabel(status: number) {
           <span class="dot pulse"></span>{{ refreshStatus }}
         </span>
       </div>
-      <div class="head-right">
+      <div class="head-center">
         <NInput
           :value="searchValue"
-          placeholder="搜索游戏…"
+          placeholder="搜索游戏名称（支持中英文）…"
           clearable
           class="search"
           @update:value="handleSearch"
@@ -125,6 +125,8 @@ function actionLabel(status: number) {
             <NIcon :component="SearchOutline" class="search-ic" />
           </template>
         </NInput>
+      </div>
+      <div class="head-right">
         <NButton
           :loading="store.refreshing"
           quaternary
@@ -239,7 +241,6 @@ export default { name: 'HomeView' }
 
 .head {
   display: flex;
-  justify-content: space-between;
   align-items: center;
   flex-shrink: 0;
   gap: 16px;
@@ -248,7 +249,18 @@ export default { name: 'HomeView' }
   display: flex;
   align-items: baseline;
   gap: 12px;
-  min-width: 0;
+  flex-shrink: 0;
+}
+.head-center {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+}
+.head-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
 .title {
   font-size: 22px;
@@ -284,9 +296,11 @@ export default { name: 'HomeView' }
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
 }
 .search {
-  width: 280px;
+  width: 100%;
+  max-width: 480px;
 }
 .search-ic {
   color: var(--text-3);

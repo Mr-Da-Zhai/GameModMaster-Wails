@@ -23,11 +23,6 @@ const router = createRouter({
       name: 'settings',
       component: () => import('../views/SettingsView.vue'),
     },
-    {
-      path: '/diag',
-      name: 'diag',
-      component: () => import('../views/DiagView.vue'),
-    },
   ],
 })
 

@@ -10,7 +10,7 @@ import {
 } from 'naive-ui'
 import { FolderOpenOutline, RefreshOutline } from '@vicons/ionicons5'
 import * as AppService from '../../bindings/GameModMaster/appservice'
-import { Events } from '@wailsio/runtime'
+import { Events, Dialogs } from '@wailsio/runtime'
 import { useTrainerStore } from '../stores/trainer'
 
 const message = useMessage()
@@ -71,6 +71,27 @@ async function handleRefresh() {
 function startEditDownloadDir() {
   downloadDirInput.value = downloadDir.value
   editingDownloadDir.value = true
+}
+
+// Open the native OS folder picker and fill the input with the choice.
+async function browseDownloadDir() {
+  try {
+    const result = await Dialogs.OpenFile({
+      Title: '选择下载目录',
+      CanChooseDirectories: true,
+      CanChooseFiles: false,
+      CanCreateDirectories: true,
+      Directory: downloadDirInput.value || downloadDir.value || '',
+    })
+    if (result) {
+      // OpenFile may return a string or string[] depending on options
+      const picked = Array.isArray(result) ? result[0] : result
+      if (picked) downloadDirInput.value = picked
+    }
+  } catch (e) {
+    console.error('browse dir failed:', e)
+    message.error('打开文件夹选择器失败')
+  }
 }
 
 function cancelEditDownloadDir() {
@@ -139,6 +160,10 @@ async function saveDownloadDir() {
                   style="width: 380px;"
                   placeholder="输入下载目录绝对路径"
                 />
+                <NButton size="small" @click="browseDownloadDir">
+                  <template #icon><NIcon><FolderOpenOutline /></NIcon></template>
+                  浏览
+                </NButton>
                 <NButton size="small" type="primary" @click="saveDownloadDir">保存</NButton>
                 <NButton size="small" @click="cancelEditDownloadDir">取消</NButton>
               </NSpace>
