@@ -25,8 +25,9 @@ import (
 
 // Event names emitted to the frontend.
 const (
-	EventRefreshProgress = "refresh:progress"
-	EventDownloadProgress = "download:progress"
+	EventRefreshProgress   = "refresh:progress"
+	EventDownloadProgress  = "download:progress"
+	EventDetailProgress    = "detail:progress"
 )
 
 // AppService is the main service exposed to the Wails frontend.
@@ -379,32 +380,128 @@ func (a *AppService) SearchTrainers(query string) ([]map[string]interface{}, err
 
 // GetTrainerDetail returns detail for a specific game (all trainer versions).
 //
-// If the game was discovered via a remote search it may have no trainer rows
-// cached yet (search only fetches the list, not each game's detail page). In
-// that case we lazily fetch and store the detail page on demand.
+// If trainer details are already cached, this is fast and synchronous.
+// If they are NOT cached (typical for games found through remote search),
+// this returns a sentinel error so the frontend can show a loading state
+// and call PrefetchTrainerDetail(gameID) to fetch in the background; that
+// call emits a "detail:progress" event when done, after which the frontend
+// calls GetTrainerDetail again to render the data.
+//
+// This avoids blocking the (single-threaded) Wails binding call on a slow
+// remote fetch, which previously froze the whole UI for several seconds.
 func (a *AppService) GetTrainerDetail(gameID int32) (map[string]interface{}, error) {
 	g, ok := a.idx.GamesByID[gameID]
 	if !ok {
 		return nil, fmt.Errorf("game not found: %d", gameID)
 	}
 
-	// Lazy-load trainer details if none are cached for this game yet. This is
-	// the common path for games found through remote search.
-	if len(a.idx.GetTrainersForGame(gameID)) == 0 && g.SourceURL != "" {
-		if page, err := a.scraperService.FetchDetailPage(g.SourceURL); err == nil {
-			var toSave []*model.Trainer
-			for _, t := range page.Trainers {
-				t.GameID = g.ID
-				toSave = append(toSave, t)
-			}
-			if len(toSave) > 0 {
-				_ = a.trainerRepo.BatchUpsert(toSave)
-			}
-			a.refreshIndex()
-			// Re-resolve the game pointer after index refresh.
-			g = a.idx.GamesByID[gameID]
+	needFetch := len(a.idx.GetTrainersForGame(gameID)) == 0 && g.SourceURL != ""
+
+	if needFetch {
+		// Trigger a background prefetch if one isn't already running, then
+		// return a sentinel error immediately so the UI can show "loading".
+		if !a.isDetailFetching(gameID) {
+			go a.prefetchDetail(gameID)
+		}
+		return nil, ErrDetailNotReady
+	}
+
+	return a.buildTrainerDetailResult(gameID), nil
+}
+
+// ErrDetailNotReady is returned by GetTrainerDetail when trainer rows for the
+// requested game are not cached yet. The frontend should treat it as "loading"
+// (a background prefetch has already been kicked off) and re-call
+// GetTrainerDetail when it receives the "detail:progress" done event.
+var ErrDetailNotReady = fmt.Errorf("detail not cached: prefetch in progress")
+
+// PrefetchTrainerDetail explicitly kicks off a background fetch of a game's
+// detail page and returns immediately. Completion is reported via the
+// "detail:progress" event with {game_id, done, error}. Safe to call even if
+// a fetch is already running for the same game (no-op in that case).
+func (a *AppService) PrefetchTrainerDetail(gameID int32) error {
+	if _, ok := a.idx.GamesByID[gameID]; !ok {
+		return fmt.Errorf("game not found: %d", gameID)
+	}
+	if a.isDetailFetching(gameID) {
+		return nil
+	}
+	go a.prefetchDetail(gameID)
+	return nil
+}
+
+// isDetailFetching reports whether a background detail fetch is in progress.
+func (a *AppService) isDetailFetching(gameID int32) bool {
+	_, ok := a.detailFetching.Load(gameID)
+	return ok
+}
+
+// prefetchDetail fetches and stores a game's trainer detail in the background,
+// then emits detail:progress. Safe to run concurrently; dedup'd via the
+// detailFetching map so a second call for the same game is a no-op.
+func (a *AppService) prefetchDetail(gameID int32) {
+	// Dedup: if already fetching, do nothing.
+	if _, loaded := a.detailFetching.LoadOrStore(gameID, struct{}{}); loaded {
+		return
+	}
+	defer a.detailFetching.Delete(gameID)
+
+	g, ok := a.idx.GamesByID[gameID]
+	if !ok {
+		a.emitEvent(EventDetailProgress, map[string]interface{}{
+			"game_id": gameID,
+			"done":    true,
+			"error":   "game not found",
+		})
+		return
+	}
+
+	// Skip if data is already cached (race: someone else fetched it).
+	if len(a.idx.GetTrainersForGame(gameID)) > 0 {
+		a.emitEvent(EventDetailProgress, map[string]interface{}{
+			"game_id": gameID,
+			"done":    true,
+		})
+		return
+	}
+
+	page, err := a.scraperService.FetchDetailPage(g.SourceURL)
+	if err != nil {
+		a.emitEvent(EventDetailProgress, map[string]interface{}{
+			"game_id": gameID,
+			"done":    true,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	var toSave []*model.Trainer
+	for _, t := range page.Trainers {
+		t.GameID = g.ID
+		toSave = append(toSave, t)
+	}
+	if len(toSave) > 0 {
+		if err := a.trainerRepo.BatchUpsert(toSave); err != nil {
+			a.emitEvent(EventDetailProgress, map[string]interface{}{
+				"game_id": gameID,
+				"done":    true,
+				"error":   err.Error(),
+			})
+			return
 		}
 	}
+	a.refreshIndex()
+
+	a.emitEvent(EventDetailProgress, map[string]interface{}{
+		"game_id": gameID,
+		"done":    true,
+	})
+}
+
+// buildTrainerDetailResult assembles the JSON-friendly detail payload for a
+// game assuming trainer rows are already cached in the index.
+func (a *AppService) buildTrainerDetailResult(gameID int32) map[string]interface{} {
+	g := a.idx.GamesByID[gameID]
 
 	trainers := a.idx.GetTrainersForGame(gameID)
 	trainerList := make([]map[string]interface{}, 0, len(trainers))
@@ -443,7 +540,7 @@ func (a *AppService) GetTrainerDetail(gameID int32) (map[string]interface{}, err
 		displayName = g.NameEN
 	}
 
-	result := map[string]interface{}{
+	return map[string]interface{}{
 		"game": map[string]interface{}{
 			"id":           g.ID,
 			"source_id":    g.SourceID,
@@ -457,8 +554,6 @@ func (a *AppService) GetTrainerDetail(gameID int32) (map[string]interface{}, err
 		},
 		"trainers": trainerList,
 	}
-
-	return result, nil
 }
 
 // GetDownloadedTrainers returns all trainers with status = downloaded or installed.
@@ -519,6 +614,7 @@ func (a *AppService) GetRefreshResult() string {
 
 // DownloadTrainer downloads a trainer file.
 // Runs synchronously; progress is emitted via the "download:progress" event.
+// Use CancelDownload(trainerID) to abort an in-flight download.
 func (a *AppService) DownloadTrainer(trainerID int32) error {
 	t, ok := a.idx.TrainersByID[trainerID]
 	if !ok {
@@ -546,9 +642,23 @@ func (a *AppService) DownloadTrainer(trainerID int32) error {
 		})
 	}
 
-	ctx := a.requestContext()
+	// Create a cancellable context for this download and register it so
+	// CancelDownload can abort it.
+	ctx, cancel := context.WithCancel(a.requestContext())
+	a.registerDownloadCancel(trainerID, cancel)
+	defer a.unregisterDownloadCancel(trainerID)
+
 	localPath, err := a.downloadService.Download(ctx, t.DownloadURL, downloadDir, fileName, progress)
 	if err != nil {
+		// Distinguish cancellation from real failures so the UI can react.
+		if ctx.Err() == context.Canceled {
+			a.emitEvent(EventDownloadProgress, map[string]interface{}{
+				"trainer_id": trainerID,
+				"cancelled":  true,
+				"done":       true,
+			})
+			return fmt.Errorf("download cancelled")
+		}
 		return fmt.Errorf("download failed: %w", err)
 	}
 
@@ -560,10 +670,10 @@ func (a *AppService) DownloadTrainer(trainerID int32) error {
 			return fmt.Errorf("extract failed: %w", err)
 		}
 
-		// Use the first extracted file as the local path
-		if len(extracted) > 0 {
-			localPath = extracted[0]
-		}
+		// Pick the launchable file: prefer .exe > .ink > first file. Earlier
+		// code took extracted[0] blindly which could land on a README and
+		// "lose" the actual trainer exe.
+		localPath = pickLaunchable(extracted, localPath)
 		// Clean up zip file
 		os.Remove(filepath.Join(downloadDir, fileName))
 	}
@@ -582,6 +692,70 @@ func (a *AppService) DownloadTrainer(trainerID int32) error {
 	// Refresh index
 	a.refreshIndex()
 	return nil
+}
+
+// CancelDownload aborts an in-flight download for the given trainer id.
+// Returns an error if no download is currently running for that trainer.
+func (a *AppService) CancelDownload(trainerID int32) error {
+	a.downloadCancelMu.Lock()
+	defer a.downloadCancelMu.Unlock()
+	cancel, ok := a.downloadCancel[trainerID]
+	if !ok {
+		return fmt.Errorf("no download in progress for trainer %d", trainerID)
+	}
+	cancel()
+	return nil
+}
+
+func (a *AppService) registerDownloadCancel(trainerID int32, cancel context.CancelFunc) {
+	a.downloadCancelMu.Lock()
+	defer a.downloadCancelMu.Unlock()
+	a.downloadCancel[trainerID] = cancel
+}
+
+func (a *AppService) unregisterDownloadCancel(trainerID int32) {
+	a.downloadCancelMu.Lock()
+	defer a.downloadCancelMu.Unlock()
+	delete(a.downloadCancel, trainerID)
+}
+
+// pickLaunchable chooses the best file to treat as the trainer executable from
+// a list of extracted files. Preference order: .exe (case-insensitive) > .ink
+// > first file. Falls back to fallbackPath if the list is empty.
+func pickLaunchable(files []string, fallbackPath string) string {
+	if len(files) == 0 {
+		return fallbackPath
+	}
+	// First pass: prefer an .exe whose name does NOT look like an
+	// uninstaller/readme.
+	for _, f := range files {
+		lf := strings.ToLower(filepath.Base(f))
+		if strings.HasSuffix(lf, ".exe") && !looksLikeAuxFile(lf) {
+			return f
+		}
+	}
+	// Second pass: any .exe.
+	for _, f := range files {
+		if strings.HasSuffix(strings.ToLower(f), ".exe") {
+			return f
+		}
+	}
+	// Third pass: .ink.
+	for _, f := range files {
+		if strings.HasSuffix(strings.ToLower(f), ".ink") {
+			return f
+		}
+	}
+	return files[0]
+}
+
+// looksLikeAuxFile returns true for filenames that are clearly NOT the trainer
+// binary (uninstallers, readme, etc.) so we don't pick them as the launchable.
+func looksLikeAuxFile(lowerBasename string) bool {
+	return strings.Contains(lowerBasename, "unins") ||
+		strings.Contains(lowerBasename, "readme") ||
+		strings.Contains(lowerBasename, "license") ||
+		strings.Contains(lowerBasename, "changelog")
 }
 
 // InstallTrainer installs a downloaded trainer.
