@@ -17,6 +17,27 @@ import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Cr
 import * as application$0 from "../github.com/wailsapp/wails/v3/pkg/application/models.js";
 
 /**
+ * CancelDownload aborts an in-flight download for the given trainer id.
+ * Returns an error if no download is currently running for that trainer.
+ * @param {number} trainerID
+ * @returns {$CancellablePromise<void>}
+ */
+export function CancelDownload(trainerID) {
+    return $Call.ByID(2568664968, trainerID);
+}
+
+/**
+ * CancelRefresh asks an in-progress crawl to stop after the current page.
+ * Returns an error if no crawl is running. The summary emitted to the UI on
+ * completion is annotated with "(已取消)" so the user knows it was not a
+ * normal finish.
+ * @returns {$CancellablePromise<void>}
+ */
+export function CancelRefresh() {
+    return $Call.ByID(1684824803);
+}
+
+/**
  * DeleteTrainer removes a downloaded/installed trainer.
  * @param {number} trainerID
  * @returns {$CancellablePromise<void>}
@@ -28,6 +49,7 @@ export function DeleteTrainer(trainerID) {
 /**
  * DownloadTrainer downloads a trainer file.
  * Runs synchronously; progress is emitted via the "download:progress" event.
+ * Use CancelDownload(trainerID) to abort an in-flight download.
  * @param {number} trainerID
  * @returns {$CancellablePromise<void>}
  */
@@ -99,6 +121,16 @@ export function GetTotalGames() {
 
 /**
  * GetTrainerDetail returns detail for a specific game (all trainer versions).
+ * 
+ * If trainer details are already cached, this is fast and synchronous.
+ * If they are NOT cached (typical for games found through remote search),
+ * this returns a sentinel error so the frontend can show a loading state
+ * and call PrefetchTrainerDetail(gameID) to fetch in the background; that
+ * call emits a "detail:progress" event when done, after which the frontend
+ * calls GetTrainerDetail again to render the data.
+ * 
+ * This avoids blocking the (single-threaded) Wails binding call on a slow
+ * remote fetch, which previously froze the whole UI for several seconds.
  * @param {number} gameID
  * @returns {$CancellablePromise<{ [_ in string]?: any }>}
  */
@@ -148,9 +180,25 @@ export function LaunchTrainer(trainerID) {
 }
 
 /**
+ * PrefetchTrainerDetail explicitly kicks off a background fetch of a game's
+ * detail page and returns immediately. Completion is reported via the
+ * "detail:progress" event with {game_id, done, error}. Safe to call even if
+ * a fetch is already running for the same game (no-op in that case).
+ * @param {number} gameID
+ * @returns {$CancellablePromise<void>}
+ */
+export function PrefetchTrainerDetail(gameID) {
+    return $Call.ByID(3403783371, gameID);
+}
+
+/**
  * RefreshData fetches latest data from flingtrainer.com asynchronously.
  * It returns immediately; progress and completion are reported via the
  * "refresh:progress" event. Use IsRefreshing() / GetRefreshResult() to poll.
+ * 
+ * If a previous crawl was interrupted, this resumes from the last page that
+ * was successfully saved (so closing and reopening the app doesn't restart
+ * the full crawl from page 1). Once finished, the resume marker is cleared.
  * @returns {$CancellablePromise<void>}
  */
 export function RefreshData() {
@@ -160,6 +208,7 @@ export function RefreshData() {
 /**
  * RefreshDataSync fetches latest data synchronously and returns when done.
  * Useful for first-run seeding or tests; prefer RefreshData from the UI.
+ * Fetches ALL pages (full library) so search works for every FLiNG game.
  * @returns {$CancellablePromise<string>}
  */
 export function RefreshDataSync() {
@@ -176,7 +225,13 @@ export function SaveSettings(settings) {
 }
 
 /**
- * SearchTrainers searches by query (Chinese or English).
+ * SearchTrainers performs a LIVE search against flingtrainer.com.
+ * 
+ * The local DB only caches a subset of games (whatever has been browsed or
+ * downloaded), so searching it would miss most of the library. Instead we
+ * always query the remote site: a Chinese query is first resolved to its
+ * English title via the name mapping, then searched remotely. Results are
+ * translated to Chinese display names, cached locally, and returned.
  * @param {string} query
  * @returns {$CancellablePromise<{ [_ in string]?: any }[]>}
  */
