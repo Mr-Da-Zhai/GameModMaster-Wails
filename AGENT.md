@@ -188,6 +188,7 @@ sqlite3 "$DB" "SELECT key,value FROM kv_store;"    # 配置项
 | `npm install` 失败 | npm 缓存损坏 | 永远用 `PACKAGE_MANAGER=pnpm wails3 build` |
 | `pattern all:frontend/dist: no matching files` | 没先构建前端就 `go build .` | 先 `pnpm run build`,或直接用 `wails3 build` |
 | bindings 改了 `app.go` 后前端不识别 | 没重新生成 bindings | `wails3 generate bindings` |
+| `too many .rsrc sections` | 仓库根有多个 `.syso` 文件(历史 `rsrc_windows_amd64.syso` + 新生成的 `wails_windows_amd64.syso`) | `rm -f *.syso` 后重跑 `wails3 build`(syso 是构建产物,gitignore 已忽略,删了不影响源码) |
 
 ---
 
