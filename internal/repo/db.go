@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 const (
@@ -78,7 +78,10 @@ func Open(dbPath string) (*DB, error) {
 		return nil, fmt.Errorf("create db directory: %w", err)
 	}
 
-	db, err := sql.Open("sqlite3", dbPath+"?_busy_timeout=5000&_journal_mode=WAL")
+	// modernc.org/sqlite uses a different DSN parameter syntax than mattn:
+	// no leading underscore on pragma-style params. The '?_pragma=...' form
+	// below applies the WAL/busy-timeout pragmas at connect time.
+	db, err := sql.Open("sqlite", dbPath+"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)")
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
