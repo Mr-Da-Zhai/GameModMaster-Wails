@@ -104,6 +104,18 @@ export interface DownloadProgress {
   done?: boolean
 }
 
+// Lightweight autocomplete suggestion returned by SearchSuggestions.
+// Only carries the fields the dropdown needs (no trainer/state).
+export interface Suggestion {
+  id: number
+  name_en: string
+  name_local: string
+  display_name: string
+  cover_url: string
+  options_num: number
+  score: number
+}
+
 // Normalize whatever the binding returns into a plain array.
 // Wails bindings may wrap results; this guards against shape mismatches.
 function toArray(result: unknown): GameEntry[] {
@@ -131,6 +143,12 @@ export const useTrainerStore = defineStore('trainer', () => {
   const refreshSummary = ref('')
 
   const downloadProgress = ref<Record<number, DownloadProgress>>({})
+
+  // Autocomplete suggestions for the search box (instant, local-only).
+  const suggestions = ref<Suggestion[]>([])
+  const suggestionsLoading = ref(false)
+  // True while a remote ("联网搜索更多") request is in flight.
+  const remoteLoading = ref(false)
 
   let listenersBound = false
   // Reload the home grid every N pages during a crawl so games appear
@@ -200,6 +218,7 @@ export const useTrainerStore = defineStore('trainer', () => {
     lastError.value = ''
     searchQuery.value = query
     try {
+      // Local-first: instant in-memory search, never hits network.
       const result = await AppService.SearchTrainers(query)
       trainers.value = toArray(result)
       currentPage.value = 1
@@ -210,6 +229,55 @@ export const useTrainerStore = defineStore('trainer', () => {
       console.error('[searchTrainers]', e)
     } finally {
       loading.value = false
+    }
+  }
+
+  // loadSuggestions powers the autocomplete dropdown. Local-only, instant.
+  // Caller is responsible for debouncing.
+  async function loadSuggestions(query: string, limit = 10) {
+    const q = query.trim()
+    if (q.length < 2) {
+      suggestions.value = []
+      return
+    }
+    suggestionsLoading.value = true
+    try {
+      const result = (await AppService.SearchSuggestions(q, limit)) as unknown
+      suggestions.value = Array.isArray(result) ? (result as Suggestion[]) : []
+    } catch (e) {
+      // Suggestions are best-effort; never block typing on an error.
+      // eslint-disable-next-line no-console
+      console.error('[loadSuggestions]', e)
+      suggestions.value = []
+    } finally {
+      suggestionsLoading.value = false
+    }
+  }
+
+  function clearSuggestions() {
+    suggestions.value = []
+  }
+
+  // searchRemote is the explicit escape hatch: called when the user clicks
+  // the "🔍 联网搜索更多..." item in the dropdown. Hits flingtrainer.com,
+  // may take a few seconds.
+  async function searchRemote(query: string) {
+    const q = query.trim()
+    if (!q) return
+    remoteLoading.value = true
+    lastError.value = ''
+    searchQuery.value = q
+    try {
+      const result = await AppService.SearchRemoteExplicit(q)
+      trainers.value = toArray(result)
+      currentPage.value = 1
+      totalCount.value = trainers.value.length
+    } catch (e) {
+      lastError.value = `联网搜索失败: ${String(e)}`
+      // eslint-disable-next-line no-console
+      console.error('[searchRemote]', e)
+    } finally {
+      remoteLoading.value = false
     }
   }
 
@@ -321,8 +389,14 @@ export const useTrainerStore = defineStore('trainer', () => {
     refreshSummary,
     downloadProgress,
     lastError,
+    suggestions,
+    suggestionsLoading,
+    remoteLoading,
     loadTrainers,
     searchTrainers,
+    loadSuggestions,
+    clearSuggestions,
+    searchRemote,
     refreshData,
     refreshDataSync,
     onRefreshComplete,

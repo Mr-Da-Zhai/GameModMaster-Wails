@@ -12,7 +12,9 @@ export const zhCN = {
   },
   home: {
     title: '游戏库',
-    searchPlaceholder: '搜索游戏（中英文均可，联网搜索全部游戏）…',
+    searchPlaceholder: '搜索游戏（中英文，本地即时匹配）…',
+    searchRemote: '联网搜索 "{query}" 更多…',
+    remoteDone: '联网搜索完成，找到 {count} 条',
     countSuffix: '款',
     refresh: '刷新数据',
     cancelRefresh: '取消刷新（进度已保存）',
@@ -21,6 +23,9 @@ export const zhCN = {
     refreshCancelled: '已请求取消刷新（进度已保存）',
     empty: '暂无游戏数据',
     loadData: '立即加载',
+    crawling: '抓取中',
+    games: '游戏',
+    failed: '失败',
   },
   detail: {
     back: '返回',

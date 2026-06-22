@@ -1,15 +1,16 @@
 <script setup lang="ts">
-import { onMounted, ref, computed, watch } from 'vue'
+import { onMounted, ref, computed, watch, h } from 'vue'
 import { useRouter } from 'vue-router'
 import {
-  NInput,
   NButton,
   NIcon,
   NPagination,
   NSpin,
   NEmpty,
   NProgress,
+  NAutoComplete,
 } from 'naive-ui'
+import type { AutoCompleteOption } from 'naive-ui'
 import {
   RefreshOutline,
   CloudDownloadOutline,
@@ -18,16 +19,23 @@ import {
   PlayOutline,
   CheckmarkCircle,
   CloseCircleOutline,
+  GlobeOutline,
 } from '@vicons/ionicons5'
-import { useTrainerStore, type GameEntry } from '../stores/trainer'
+import { useI18n } from 'vue-i18n'
+import { useTrainerStore, type GameEntry, type Suggestion } from '../stores/trainer'
 import { useFeedback } from '../composables/useConfirm'
 
+const { t } = useI18n()
 const router = useRouter()
 const store = useTrainerStore()
 const { toast } = useFeedback()
 
 const searchValue = ref('')
-let searchTimer: ReturnType<typeof setTimeout> | null = null
+let suggestTimer: ReturnType<typeof setTimeout> | null = null
+
+// Sentinel value the dropdown emits when the user picks the
+// "🔍 联网搜索更多..." row. Distinct from any real game id.
+const REMOTE_MARKER = '__remote__'
 
 onMounted(() => {
   store.bindEvents()
@@ -41,22 +49,105 @@ watch(
   }
 )
 
-function handleSearch(query: string) {
-  searchValue.value = query
-  if (searchTimer) clearTimeout(searchTimer)
-  // Remote search hits the network, so debounce a bit longer than a local
-  // lookup would, and clear immediately when the input is emptied.
-  if (!query.trim()) {
-    store.searchTrainers('')
+// As the user types, fetch local suggestions (instant) to populate the
+// autocomplete dropdown. Debounced 150ms; only fires for ≥2 chars.
+function handleSearchInput(value: string) {
+  searchValue.value = value
+  if (suggestTimer) clearTimeout(suggestTimer)
+  if (!value.trim() || value.trim().length < 2) {
+    store.clearSuggestions()
     return
   }
-  searchTimer = setTimeout(() => store.searchTrainers(query), 500)
+  suggestTimer = setTimeout(() => {
+    store.loadSuggestions(value, 10)
+  }, 150)
 }
 
+// Build NAutoComplete options: real suggestions first, then a trailing
+// "联网搜索更多" row that triggers an explicit remote query.
+// The option's label is a plain string (Naive UI 1.x AutoCompleteOption
+// requires string); we carry the full suggestion in a side map keyed by
+// the option value so the render-label slot and select handler can reach it.
+const suggestionsByValue = ref<Record<string, Suggestion>>({})
+
+const searchOptions = computed<AutoCompleteOption[]>(() => {
+  const map: Record<string, Suggestion> = {}
+  const opts: AutoCompleteOption[] = store.suggestions.map((s) => {
+    const v = String(s.id)
+    map[v] = s
+    return { label: s.display_name || s.name_en, value: v }
+  })
+  // Always offer the remote escape hatch when there's a query, even if
+  // we have local hits (the user may be looking for something newer than
+  // the local library knows about).
+  if (searchValue.value.trim().length >= 2) {
+    opts.push({ label: REMOTE_MARKER, value: REMOTE_MARKER })
+  }
+  suggestionsByValue.value = map
+  return opts
+})
+
+// Custom render for an option's label (cover thumb + names + opts count).
+// Receives the option value; we look up the suggestion from the side map.
+function renderLabel(option: AutoCompleteOption) {
+  const value = String(option.value)
+  if (value === REMOTE_MARKER) {
+    return h(
+      'div',
+      { class: 'sug-remote' },
+      [
+        h(NIcon, { size: 14, class: 'sug-remote-ic' }, { default: () => h(GlobeOutline) }),
+        h('span', t('home.searchRemote', { query: searchValue.value.trim() })),
+      ],
+    )
+  }
+  const s = suggestionsByValue.value[value]
+  if (!s) return String(option.label)
+  return h('div', { class: 'sug-row' }, [
+    h('img', {
+      src: s.cover_url || '',
+      class: 'sug-thumb',
+      loading: 'lazy',
+      onError: (e: Event) => ((e.target as HTMLImageElement).style.visibility = 'hidden'),
+    }),
+    h('div', { class: 'sug-text' }, [
+      h('div', { class: 'sug-name' }, s.display_name || s.name_en),
+      s.name_local && s.name_local !== s.display_name
+        ? h('div', { class: 'sug-sub' }, s.name_en)
+        : null,
+    ]),
+    s.options_num ? h('div', { class: 'sug-opts' }, `${s.options_num}项`) : null,
+  ])
+}
+
+// User selected a dropdown row (via click or Enter after keyboard nav).
+// If it's a real game → jump straight to detail. If it's the remote
+// marker → fire the explicit remote search.
+function handleSearchSelect(value: string) {
+  if (suggestTimer) clearTimeout(suggestTimer)
+  if (value === REMOTE_MARKER) {
+    const q = searchValue.value.trim()
+    if (!q) return
+    store.searchRemote(q).then(() => {
+      toast.success(t('home.remoteDone', { count: store.trainers.length }))
+    })
+    return
+  }
+  // Real game selected — jump to detail page directly.
+  const id = Number(value)
+  if (id > 0) {
+    router.push({ name: 'detail', params: { id } })
+    // Clear the dropdown so it doesn't reappear on return.
+    store.clearSuggestions()
+  }
+}
+
+// Enter pressed without selecting a dropdown row → run a local full
+// search (not remote; the user can pick the remote row explicitly).
 function handleSearchEnter() {
-  // Enter commits the search immediately instead of waiting for debounce.
-  if (searchTimer) clearTimeout(searchTimer)
-  if (searchValue.value.trim()) store.searchTrainers(searchValue.value)
+  if (suggestTimer) clearTimeout(suggestTimer)
+  const q = searchValue.value.trim()
+  if (q) store.searchTrainers(q)
 }
 
 function handleRefresh() {
@@ -66,7 +157,7 @@ function handleRefresh() {
 async function handleCancelRefresh() {
   try {
     await store.cancelRefresh()
-    toast.info('已请求取消刷新（进度已保存）')
+    toast.info(t('home.refreshCancelled'))
   } catch (e: any) {
     toast.error(e?.message || String(e))
   }
@@ -87,9 +178,9 @@ function openDetail(row: GameEntry) {
 function statusBadge(status: number) {
   switch (status) {
     case 1:
-      return { text: '已下载', cls: 'badge-downloaded' }
+      return { text: t('detail.status.downloaded'), cls: 'badge-downloaded' }
     case 2:
-      return { text: '已安装', cls: 'badge-installed' }
+      return { text: t('detail.status.installed'), cls: 'badge-installed' }
     default:
       return null
   }
@@ -105,8 +196,8 @@ const refreshStatus = computed(() => {
   const p = store.refreshProgress
   if (!p || !p.current) return ''
   const pct = p.total ? Math.round((p.current / p.total) * 100) : 0
-  const errs = p.detail_errors ? ` · ${p.detail_errors} 失败` : ''
-  return `抓取中 ${p.current}/${p.total || 3} (${pct}%) · ${p.games || 0} 游戏${errs}`
+  const errs = p.detail_errors ? ` · ${p.detail_errors} ${t('home.failed')}` : ''
+  return `${t('home.crawling')} ${p.current}/${p.total || 3} (${pct}%) · ${p.games || 0} ${t('home.games')}${errs}`
 })
 
 const refreshPercent = computed(() => {
@@ -116,7 +207,7 @@ const refreshPercent = computed(() => {
 })
 
 const isEmpty = computed(
-  () => !store.loading && !store.refreshing && store.trainers.length === 0
+  () => !store.loading && !store.refreshing && !store.remoteLoading && store.trainers.length === 0
 )
 
 function onCardAction(e: Event, row: GameEntry) {
@@ -147,18 +238,29 @@ function actionLabel(status: number) {
         </span>
       </div>
       <div class="head-center">
-        <NInput
+        <NAutoComplete
           :value="searchValue"
-          placeholder="搜索游戏（中英文均可，联网搜索全部游戏）…"
+          :options="searchOptions"
+          :render-label="renderLabel"
+          :placeholder="t('home.searchPlaceholder')"
+          :loading="store.suggestionsLoading"
           clearable
           class="search"
-          @update:value="handleSearch"
+          @update:value="handleSearchInput"
+          @select="handleSearchSelect"
           @keyup.enter="handleSearchEnter"
         >
           <template #prefix>
             <NIcon :component="SearchOutline" class="search-ic" />
           </template>
-        </NInput>
+        </NAutoComplete>
+        <NIcon
+          v-if="store.remoteLoading"
+          size="14"
+          class="remote-spinner"
+        >
+          <RefreshOutline />
+        </NIcon>
       </div>
       <div class="head-right">
         <NButton
@@ -361,6 +463,74 @@ export default { name: 'HomeView' }
 }
 .search-ic {
   color: var(--text-3);
+}
+
+/* Remote-search spinner shown next to the box while a remote query is in flight */
+.remote-spinner {
+  color: var(--accent);
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Autocomplete suggestion rows — these live in a teleport'd dropdown so the
+   styles must be global (non-scoped). The :deep() wrapper targets them from
+   inside the scoped style block. */
+:deep(.sug-row) {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 4px;
+}
+:deep(.sug-thumb) {
+  width: 30px;
+  height: 40px;
+  border-radius: 4px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--surface-2);
+}
+:deep(.sug-text) {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+:deep(.sug-name) {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+:deep(.sug-sub) {
+  font-size: 11px;
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+:deep(.sug-opts) {
+  font-size: 11px;
+  color: var(--accent);
+  background: var(--accent-glow);
+  padding: 2px 7px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+:deep(.sug-remote) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 4px;
+  font-size: 13px;
+  color: var(--accent);
+  border-top: 1px dashed var(--border);
+}
+:deep(.sug-remote-ic) {
+  color: var(--accent);
 }
 
 .error-bar {

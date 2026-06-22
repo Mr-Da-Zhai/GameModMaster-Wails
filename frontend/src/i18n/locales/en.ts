@@ -11,7 +11,9 @@ export const en = {
   },
   home: {
     title: 'Game Library',
-    searchPlaceholder: 'Search games (Chinese or English; searches all games online)…',
+    searchPlaceholder: 'Search games (Chinese or English; instant local match)…',
+    searchRemote: 'Search "{query}" online for more…',
+    remoteDone: 'Online search done, {count} results',
     countSuffix: '',
     refresh: 'Refresh data',
     cancelRefresh: 'Cancel refresh (progress is saved)',
@@ -20,6 +22,9 @@ export const en = {
     refreshCancelled: 'Refresh cancel requested (progress saved)',
     empty: 'No games yet',
     loadData: 'Load now',
+    crawling: 'Crawling',
+    games: 'games',
+    failed: 'failed',
   },
   detail: {
     back: 'Back',
