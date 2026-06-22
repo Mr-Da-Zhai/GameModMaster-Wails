@@ -210,13 +210,51 @@ export function SaveSettings(settings: { [_ in string]?: any }): $CancellablePro
 }
 
 /**
- * SearchTrainers performs a LIVE search against flingtrainer.com.
+ * SearchRemoteExplicit performs a LIVE search against flingtrainer.com.
  * 
- * The local DB only caches a subset of games (whatever has been browsed or
- * downloaded), so searching it would miss most of the library. Instead we
- * always query the remote site: a Chinese query is first resolved to its
- * English title via the name mapping, then searched remotely. Results are
- * translated to Chinese display names, cached locally, and returned.
+ * This is the escape hatch used when the local library doesn't have what
+ * the user wants (the dropdown's "🔍 联网搜索更多..." item). It resolves a
+ * Chinese query to English titles via the name mapping, queries the site,
+ * caches the results locally, and rebuilds the in-memory index so subsequent
+ * detail lookups resolve.
+ * 
+ * Because it's user-initiated (not on every keystroke), the multi-second
+ * latency is acceptable.
+ */
+export function SearchRemoteExplicit(query: string): $CancellablePromise<{ [_ in string]?: any }[]> {
+    return $Call.ByID(2707682292, query).then(($result: any) => {
+        return $$createType1($result);
+    });
+}
+
+/**
+ * SearchSuggestions returns up to `limit` lightweight autocomplete candidates
+ * ranked by match quality (exact > prefix > substring). Used by the search
+ * box dropdown so the user sees candidates as they type. Pure in-memory;
+ * never hits the network or the DB.
+ * 
+ * Each item carries only the fields the dropdown needs (id, names, cover,
+ * options) — no trainer/state construction — so a 10-item call is cheap.
+ */
+export function SearchSuggestions(query: string, limit: number): $CancellablePromise<{ [_ in string]?: any }[]> {
+    return $Call.ByID(2725045639, query, limit).then(($result: any) => {
+        return $$createType1($result);
+    });
+}
+
+/**
+ * SearchTrainers performs a LOCAL-first search.
+ * 
+ * The local DB now holds the full library (~731 games after a full crawl),
+ * so the common case is an instant in-memory lookup that hits no network
+ * and writes nothing. Only when the user explicitly wants to look beyond
+ * the local library do we hit the remote site — via SearchRemoteExplicit.
+ * 
+ * If the local index returns zero matches the result is simply empty; the
+ * frontend renders a "🔍 联网搜索更多..." affordance that calls
+ * SearchRemoteExplicit on click. This keeps typing responsive: every
+ * keystroke resolves in < 5ms instead of firing 5 HTTP requests + a DB
+ * upsert + a full index rebuild.
  */
 export function SearchTrainers(query: string): $CancellablePromise<{ [_ in string]?: any }[]> {
     return $Call.ByID(903045308, query).then(($result: any) => {
