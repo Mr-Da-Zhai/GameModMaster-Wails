@@ -109,11 +109,24 @@ func (r *GameRepo) BatchUpsert(games []*model.Game) error {
 	}
 	defer tx.Rollback()
 
-	const upsertSQL = `INSERT OR REPLACE INTO games (id, source_id, name_en, name_local, cover_url, source_url, options_num, updated_at)
+	// ON CONFLICT(source_id) DO UPDATE — NOT INSERT OR REPLACE.
+	// games is the parent of trainers (FK ON DELETE CASCADE), and trainers
+	// is the parent of trainer_states (also CASCADE). INSERT OR REPLACE
+	// would delete+reinsert the games row, cascading to wipe every trainer
+	// and its download state on every refresh. ON CONFLICT keeps the row
+	// (and its id) in place so no CASCADE fires.
+	const upsertSQL = `INSERT INTO games (id, source_id, name_en, name_local, cover_url, source_url, options_num, updated_at)
 	                   VALUES (
 	                       (SELECT id FROM games WHERE source_id = ?),
 	                       ?, ?, ?, ?, ?, ?, ?
-	                   )`
+	                   )
+	                   ON CONFLICT(source_id) DO UPDATE SET
+	                       name_en = excluded.name_en,
+	                       name_local = excluded.name_local,
+	                       cover_url = excluded.cover_url,
+	                       source_url = excluded.source_url,
+	                       options_num = excluded.options_num,
+	                       updated_at = excluded.updated_at`
 
 	stmt, err := tx.Prepare(upsertSQL)
 	if err != nil {

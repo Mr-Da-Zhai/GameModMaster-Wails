@@ -797,6 +797,93 @@ func (a *AppService) CancelDownload(trainerID int32) error {
 	return nil
 }
 
+// ReconcileDownloads scans the configured download directory for trainer
+// files whose DB state was lost (e.g. by the historical INSERT OR REPLACE
+// cascade-delete bug) and re-creates their trainer_states rows. Files are
+// matched to trainers by the base filename (with and without a .exe
+// extension, since FLiNG strips the extension in the zip and we add it on
+// extract). Returns the number of states recovered.
+//
+// Safe to run repeatedly — existing states are left untouched.
+func (a *AppService) ReconcileDownloads() (int, error) {
+	downloadDir := a.downloadDir()
+	entries, err := os.ReadDir(downloadDir)
+	if err != nil {
+		return 0, fmt.Errorf("read download dir %s: %w", downloadDir, err)
+	}
+
+	// Build a lookup: lowercase base filename (no extension) -> trainer.
+	// We strip .exe / "" so both "foo-FLiNG" and "foo-FLiNG.exe" match a
+	// trainer whose file_name is "foo-FLiNG".
+	type match struct {
+		trainerID int32
+		fullPath  string
+	}
+	byBaseName := make(map[string][]match)
+	for _, t := range a.idx.TrainersByID {
+		if t.FileName == "" {
+			continue
+		}
+		base := strings.ToLower(t.FileName)
+		byBaseName[base] = append(byBaseName[base], match{trainerID: t.ID, fullPath: ""})
+	}
+
+	recovered := 0
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		// Strip a trailing .exe (case-insensitive) so we also match trainers
+		// whose stored file_name lacks the extension.
+		baseKey := strings.ToLower(name)
+		baseKeyNoExt := strings.TrimSuffix(baseKey, ".exe")
+
+		var candidates []match
+		// Try both the literal name and the no-.exe variant.
+		candidates = append(candidates, byBaseName[baseKey]...)
+		candidates = append(candidates, byBaseName[baseKeyNoExt]...)
+
+		// Dedupe candidates by trainerID.
+		seen := map[int32]bool{}
+		var unique []int32
+		for _, c := range candidates {
+			if !seen[c.trainerID] {
+				seen[c.trainerID] = true
+				unique = append(unique, c.trainerID)
+			}
+		}
+		if len(unique) == 0 {
+			continue
+		}
+
+		fullPath := filepath.Join(downloadDir, name)
+		// Repair the extension if missing (same logic as ensureLaunchableExe).
+		if repaired, changed := service.EnsureExeExtension(fullPath); changed {
+			fullPath = repaired
+		}
+
+		// For each matching trainer (usually just one), create a state row
+		// only if none exists yet — don't overwrite real states.
+		for _, tid := range unique {
+			if existing := a.idx.GetTrainerState(tid); existing != nil {
+				continue
+			}
+			if err := a.downloadService.MarkInstalled(tid, fullPath); err != nil {
+				log.Printf("[AppService] reconcile: failed to mark trainer %d: %v", tid, err)
+				continue
+			}
+			recovered++
+			log.Printf("[AppService] reconcile: recovered state for trainer %d -> %s", tid, fullPath)
+		}
+	}
+
+	if recovered > 0 {
+		a.refreshIndex()
+	}
+	return recovered, nil
+}
+
 func (a *AppService) registerDownloadCancel(trainerID int32, cancel context.CancelFunc) {
 	a.downloadCancelMu.Lock()
 	defer a.downloadCancelMu.Unlock()

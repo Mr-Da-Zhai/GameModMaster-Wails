@@ -83,11 +83,26 @@ func (r *TrainerRepo) BatchUpsert(trainers []*model.Trainer) error {
 	}
 	defer tx.Rollback()
 
-	const upsertSQL = `INSERT OR REPLACE INTO trainers (id, game_id, version, game_version, download_url, file_size, file_name, download_count, source_hash, updated_at)
+	// ON CONFLICT(source_hash) DO UPDATE — NOT INSERT OR REPLACE.
+	// INSERT OR REPLACE deletes the conflicting row and inserts a new one
+	// (with a freshly assigned id even if the value is the same), which
+	// triggers the trainer_states ON DELETE CASCADE and silently wipes the
+	// user's download/install state on every refresh. ON CONFLICT DO UPDATE
+	// keeps the existing row (and its id) in place, so CASCADE never fires.
+	const upsertSQL = `INSERT INTO trainers (id, game_id, version, game_version, download_url, file_size, file_name, download_count, source_hash, updated_at)
 	                   VALUES (
 	                       (SELECT id FROM trainers WHERE source_hash = ?),
 	                       ?, ?, ?, ?, ?, ?, ?, ?, ?
-	                   )`
+	                   )
+	                   ON CONFLICT(source_hash) DO UPDATE SET
+	                       game_id = excluded.game_id,
+	                       version = excluded.version,
+	                       game_version = excluded.game_version,
+	                       download_url = excluded.download_url,
+	                       file_size = excluded.file_size,
+	                       file_name = excluded.file_name,
+	                       download_count = excluded.download_count,
+	                       updated_at = excluded.updated_at`
 
 	stmt, err := tx.Prepare(upsertSQL)
 	if err != nil {
