@@ -125,13 +125,58 @@ func (s *DownloadService) ExtractZIP(zipPath string, destDir string) ([]string, 
 		}
 
 		destPath := filepath.Join(destDir, filepath.Base(f.Name))
-		extracted = append(extracted, destPath)
-
 		if err := s.extractFile(f, destPath); err != nil {
 			return nil, err
 		}
+
+		// FLiNG trainers ship as PE executables but with the .exe extension
+		// stripped from the filename (anti-AV trick). Windows refuses to
+		// execute such files via ShellExecute, so detect the PE header and
+		// rename to <name>.exe on disk. This makes LaunchTrainer work.
+		if fixed, ok := ensureExeExtension(destPath); ok {
+			destPath = fixed
+		}
+
+		extracted = append(extracted, destPath)
 	}
 	return extracted, nil
+}
+
+// EnsureExeExtension checks whether a file at path is a Windows PE executable
+// (MZ header) but lacks an executable extension (.exe / .bat / .com / .cmd /
+// .scr / .pif). If so, it renames it to <path>.exe and returns the new path.
+// Returns (path, false) if the file already has an exec extension or is not a
+// PE binary (or the rename failed).
+//
+// Exported so app.go's LaunchTrainer can repair legacy local_path values
+// whose file lost its .exe extension (pre-fix downloads).
+func EnsureExeExtension(path string) (string, bool) {
+	return ensureExeExtension(path)
+}
+
+// ensureExeExtension is the internal implementation; see EnsureExeExtension.
+func ensureExeExtension(path string) (string, bool) {
+	ext := strings.ToLower(filepath.Ext(path))
+	switch ext {
+	case ".exe", ".bat", ".com", ".cmd", ".scr", ".pif", ".msi", ".ps1":
+		return path, false
+	}
+	// Read the first 2 bytes — MZ = DOS/PE header.
+	f, err := os.Open(path)
+	if err != nil {
+		return path, false
+	}
+	var head [2]byte
+	_, err = f.Read(head[:])
+	f.Close()
+	if err != nil || head[0] != 'M' || head[1] != 'Z' {
+		return path, false
+	}
+	newPath := path + ".exe"
+	if err := os.Rename(path, newPath); err != nil {
+		return path, false
+	}
+	return newPath, true
 }
 
 func (s *DownloadService) extractFile(f *zip.File, destPath string) error {

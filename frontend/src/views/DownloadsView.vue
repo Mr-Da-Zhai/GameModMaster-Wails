@@ -230,10 +230,11 @@ export default { name: 'DownloadsView' }
   inset: 0;
   background: linear-gradient(0deg, rgba(15, 23, 42, 0.92) 0%, rgba(15, 23, 42, 0.3) 50%, transparent 100%);
   display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  gap: 10px;
-  padding-bottom: 14px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-bottom: 16px;
   opacity: 0;
   transition: opacity 0.18s ease;
 }
@@ -243,23 +244,27 @@ export default { name: 'DownloadsView' }
 .action-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  padding: 7px 16px;
+  width: 78%;
+  padding: 8px 16px;
   border: none;
-  border-radius: 20px;
+  border-radius: 999px; /* full pill shape */
   background: var(--accent);
   color: #04201c;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.15s ease, transform 0.15s ease;
+  transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 .action-btn:hover {
   background: #5eead4;
-  transform: scale(1.05);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
 }
 .action-btn.danger {
-  background: rgba(248, 113, 113, 0.9);
+  background: rgba(248, 113, 113, 0.95);
   color: #2a0a0a;
 }
 .action-btn.danger:hover {

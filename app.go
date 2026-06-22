@@ -885,6 +885,11 @@ func (a *AppService) InstallTrainer(trainerID int32) error {
 }
 
 // LaunchTrainer launches an installed trainer executable.
+//
+// Tries a direct exec first; if that fails (typical cause: trainer needs
+// administrator privileges), falls back to a UAC-elevated launch via
+// ShellExecute "runas" on Windows. This is the common case for FLiNG
+// trainers, which inject into a game process and therefore need admin.
 func (a *AppService) LaunchTrainer(trainerID int32) error {
 	state := a.idx.GetTrainerState(trainerID)
 	if state == nil || state.Status != model.StatusInstalled {
@@ -895,32 +900,97 @@ func (a *AppService) LaunchTrainer(trainerID int32) error {
 		return fmt.Errorf("trainer %d has no local path", trainerID)
 	}
 
+	// The local_path may point to a file whose .exe extension was missing at
+	// download time (legacy rows). Repair it on the fly so the launch works.
+	exePath := state.LocalPath
+	if repaired, changed := ensureLaunchableExe(exePath); changed {
+		exePath = repaired
+		// Persist the corrected path so future launches skip the check.
+		_ = a.downloadService.MarkInstalled(trainerID, repaired)
+		state.LocalPath = repaired
+	}
+
 	// Check file exists
-	if _, err := os.Stat(state.LocalPath); os.IsNotExist(err) {
-		return fmt.Errorf("trainer file not found: %s", state.LocalPath)
+	info, err := os.Stat(exePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("trainer file not found: %s", exePath)
+		}
+		return fmt.Errorf("stat trainer file: %w", err)
+	}
+	if info.IsDir() {
+		return fmt.Errorf("trainer path is a directory, not a file: %s", exePath)
 	}
 
-	// Launch
-	var cmd *exec.Cmd
-	if runtime.GOOS == "windows" {
-		cmd = exec.Command("cmd", "/c", "start", "", state.LocalPath)
-	} else if runtime.GOOS == "darwin" {
-		cmd = exec.Command("open", state.LocalPath)
-	} else {
-		cmd = exec.Command("xdg-open", state.LocalPath)
+	// Attempt 1: direct exec (no UAC). Works for trainers that don't need
+	// admin and is the least intrusive.
+	if err := launchDirect(exePath); err == nil {
+		a.markLaunched(trainerID)
+		return nil
 	}
 
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("launch failed: %w", err)
+	// Attempt 2: UAC-elevated launch via the OS shell. On Windows this
+	// triggers the elevation prompt; the user already clicked 启动 so it's
+	// expected. On macOS/Linux this is the only path anyway.
+	if err := launchElevated(exePath); err != nil {
+		return fmt.Errorf("launch failed (tried direct + elevated): %w", err)
 	}
+	a.markLaunched(trainerID)
+	return nil
+}
 
-	// Update launch time
+// markLaunched updates the launch timestamp, logging any error.
+func (a *AppService) markLaunched(trainerID int32) {
 	if err := a.downloadService.MarkLaunched(trainerID); err != nil {
 		log.Printf("[AppService] Warning: failed to update launch time: %v", err)
 	}
-
 	a.refreshIndex()
-	return nil
+}
+
+// ensureLaunchableExe repairs a local_path whose target file is a PE
+// executable but lacks the .exe extension (legacy / pre-fix downloads). It
+// renames the file to <path>.exe and returns the new path + changed=true.
+// No-op if the path already ends in an exec extension or the file isn't a
+// PE binary.
+func ensureLaunchableExe(path string) (string, bool) {
+	return service.EnsureExeExtension(path)
+}
+
+// launchDirect runs the exe in the background without UAC.
+func launchDirect(exePath string) error {
+	cmd := exec.Command(exePath)
+	// Detach std handles so the child isn't tied to this process's lifetime.
+	cmd.Stdin = nil
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	return cmd.Start()
+}
+
+// launchElevated launches the exe via the OS shell. On Windows this uses
+// ShellExecute with the "runas" verb, which triggers the UAC prompt — the
+// correct behaviour for trainers that need admin. On macOS/Linux it falls
+// back to `open` / `xdg-open`.
+func launchElevated(exePath string) error {
+	if runtime.GOOS == "windows" {
+		// Use cmd's `start` with the runas verb via explorer's shell execute.
+		// `powershell -WindowStyle Hidden -Command Start-Process -Verb RunAs`
+		// is a reliable cross-build incantation that triggers UAC.
+		cmd := exec.Command(
+			"powershell",
+			"-NoProfile",
+			"-WindowStyle", "Hidden",
+			"-Command",
+			fmt.Sprintf("Start-Process -FilePath '%s' -Verb RunAs", strings.ReplaceAll(exePath, "'", "''")),
+		)
+		cmd.Stdin = nil
+		cmd.Stdout = nil
+		cmd.Stderr = nil
+		return cmd.Start()
+	}
+	if runtime.GOOS == "darwin" {
+		return exec.Command("open", exePath).Start()
+	}
+	return exec.Command("xdg-open", exePath).Start()
 }
 
 // DeleteTrainer removes a downloaded/installed trainer.
