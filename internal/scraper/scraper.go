@@ -19,12 +19,14 @@ const baseURL = "https://flingtrainer.com"
 
 const (
 	// defaultFetchRetries is how many times FetchPage retries a transient
-	// (network / 5xx) failure before giving up. 4xx responses are not retried.
-	defaultFetchRetries = 3
+	// (network / 429 / 5xx) failure before giving up. Other 4xx responses
+	// are not retried.
+	defaultFetchRetries = 4
 	// defaultDetailConcurrency is how many detail pages are fetched in
-	// parallel during a FetchAndSave call. Tuned to finish a ~730-game crawl
-	// quickly while staying polite to the source site.
-	defaultDetailConcurrency = 6
+	// parallel during a FetchAndSave call. flingtrainer.com rate-limits
+	// aggressively (HTTP 429) when hit too hard; 3 workers keeps the
+	// ~730-game crawl under ~2 minutes while staying well under the limit.
+	defaultDetailConcurrency = 3
 )
 
 // Scraper fetches and parses trainer data from flingtrainer.com.
@@ -58,10 +60,10 @@ func (s *Scraper) FetchPage(pageURL string) (string, error) {
 }
 
 // FetchPageWithRetries fetches HTML content, retrying transient failures
-// (network errors or 5xx responses) with exponential backoff. 4xx responses
-// are not retried — they are definitive "this URL is broken" answers from the
-// server. Used by every HTTP path so a single flaky page does not abort an
-// hours-long full crawl.
+// (network errors, 429 rate-limits, or 5xx responses) with exponential
+// backoff. Other 4xx responses are not retried — they are definitive "this
+// URL is broken" answers from the server. Used by every HTTP path so a
+// single flaky page does not abort an hours-long full crawl.
 func (s *Scraper) FetchPageWithRetries(pageURL string, maxAttempts int) (string, error) {
 	if maxAttempts < 1 {
 		maxAttempts = 1
@@ -89,7 +91,22 @@ func (s *Scraper) FetchPageWithRetries(pageURL string, maxAttempts int) (string,
 			continue // retry network errors
 		}
 
-		// 4xx: definitive, do not retry.
+		// 429 Too Many Requests: rate-limited, worth retrying with backoff.
+		// Honour Retry-After if the server sent one.
+		if resp.StatusCode == 429 {
+			resp.Body.Close()
+			lastErr = fmt.Errorf("fetch %s: status %d (rate limited)", pageURL, resp.StatusCode)
+			// Optional Retry-After header (seconds).
+			if ra := resp.Header.Get("Retry-After"); ra != "" {
+				var secs int
+				if _, err := fmt.Sscanf(ra, "%d", &secs); err == nil && secs > 0 && secs < 60 {
+					time.Sleep(time.Duration(secs) * time.Second)
+					continue
+				}
+			}
+			continue
+		}
+		// 4xx (other than 429): definitive, do not retry.
 		if resp.StatusCode >= 400 && resp.StatusCode < 500 {
 			resp.Body.Close()
 			return "", fmt.Errorf("fetch %s: status %d", pageURL, resp.StatusCode)
@@ -157,20 +174,31 @@ func (s *Scraper) FetchListPage(page int) ([]*model.Game, error) {
 // the binary search believe there were 256 pages and triggered 200+ useless
 // 404 requests on every refresh. We instead require a real <article> element
 // carrying the post-standard class.
+//
+// Errors during probing (e.g. transient 429 rate-limits) are retried a couple
+// of times; if a page still won't answer we treat it conservatively as "no
+// articles" so the binary search converges on the highest reachable page.
 func (s *Scraper) CountTotalPages() (int, error) {
 	// hasRealArticles returns true only if the page actually lists game
 	// articles (i.e. <article ... class="...post-standard..."> appears at
-	// least once).
+	// least once). Retries up to 3 times on transient errors.
 	hasRealArticles := func(p int) (bool, error) {
 		pageURL := baseURL + "/"
 		if p > 1 {
 			pageURL = fmt.Sprintf("%s/page/%d/", baseURL, p)
 		}
-		html, err := s.FetchPage(pageURL)
-		if err != nil {
-			return false, err
+		var lastErr error
+		for try := 0; try < 3; try++ {
+			html, err := s.FetchPage(pageURL)
+			if err != nil {
+				lastErr = err
+				// Brief backoff before retrying the probe.
+				time.Sleep(time.Duration(300*(try+1)) * time.Millisecond)
+				continue
+			}
+			return hasGameArticles(html), nil
 		}
-		return hasGameArticles(html), nil
+		return false, lastErr
 	}
 
 	// Find an upper bound that no longer has real articles.
@@ -178,7 +206,8 @@ func (s *Scraper) CountTotalPages() (int, error) {
 	for {
 		ok, err := hasRealArticles(hi)
 		if err != nil {
-			return lo, nil // be tolerant: return what we know
+			// Network/rate-limit error: don't expand further; converge now.
+			break
 		}
 		if !ok {
 			break
@@ -190,6 +219,8 @@ func (s *Scraper) CountTotalPages() (int, error) {
 		if hi > 1024 {
 			break
 		}
+		// Polite gap between probe requests.
+		time.Sleep(150 * time.Millisecond)
 	}
 
 	// Binary search the last existing page in (lo, hi].
@@ -197,13 +228,16 @@ func (s *Scraper) CountTotalPages() (int, error) {
 		mid := (lo + hi) / 2
 		ok, err := hasRealArticles(mid)
 		if err != nil {
-			break
+			// On error, narrow the window conservatively (treat as "absent").
+			hi = mid
+			continue
 		}
 		if ok {
 			lo = mid
 		} else {
 			hi = mid
 		}
+		time.Sleep(120 * time.Millisecond)
 	}
 	return lo, nil
 }
@@ -434,8 +468,14 @@ func (s *Scraper) FetchAndSaveOpts(page, concurrency int) (int, int, error) {
 		go func() {
 			defer wg.Done()
 			for j := range jobCh {
+				// Tiny per-worker offset so the workers don't all fire on the
+				// same millisecond tick. Combined with the default 3-worker
+				// pool this keeps the request rate well under the site's 429
+				// threshold during a full ~730-game crawl.
 				dp, err := s.FetchDetailPage(j.game.SourceURL)
 				results <- detailResult{game: j.game, storedID: j.stored.ID, page: dp, err: err}
+				// Polite gap between this worker's requests.
+				time.Sleep(120 * time.Millisecond)
 			}
 		}()
 	}
