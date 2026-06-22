@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"GameModMaster/internal/model"
@@ -16,12 +17,27 @@ import (
 
 const baseURL = "https://flingtrainer.com"
 
+const (
+	// defaultFetchRetries is how many times FetchPage retries a transient
+	// (network / 5xx) failure before giving up. 4xx responses are not retried.
+	defaultFetchRetries = 3
+	// defaultDetailConcurrency is how many detail pages are fetched in
+	// parallel during a FetchAndSave call. Tuned to finish a ~730-game crawl
+	// quickly while staying polite to the source site.
+	defaultDetailConcurrency = 6
+)
+
 // Scraper fetches and parses trainer data from flingtrainer.com.
 type Scraper struct {
 	client         *http.Client
 	gameRepo       *repo.GameRepo
 	trainerRepo    *repo.TrainerRepo
 	mappingService *service.MappingService
+
+	// lastDetailErrors holds the number of detail-page fetch failures seen
+	// during the most recent FetchAndSave / FetchAndSaveOpt call. Read via
+	// LastDetailErrors() after the call returns.
+	lastDetailErrors int
 }
 
 // NewScraper creates a new Scraper with the given dependencies.
@@ -38,28 +54,66 @@ func NewScraper(gameRepo *repo.GameRepo, trainerRepo *repo.TrainerRepo, mappingS
 
 // FetchPage fetches HTML content from a URL with a User-Agent header.
 func (s *Scraper) FetchPage(pageURL string) (string, error) {
-	req, err := http.NewRequest("GET", pageURL, nil)
-	if err != nil {
-		return "", fmt.Errorf("create request for %s: %w", pageURL, err)
-	}
-	req.Header.Set("User-Agent", "GameModMaster/1.0 (Desktop App)")
+	return s.FetchPageWithRetries(pageURL, defaultFetchRetries)
+}
 
-	resp, err := s.client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("fetch %s: %w", pageURL, err)
+// FetchPageWithRetries fetches HTML content, retrying transient failures
+// (network errors or 5xx responses) with exponential backoff. 4xx responses
+// are not retried — they are definitive "this URL is broken" answers from the
+// server. Used by every HTTP path so a single flaky page does not abort an
+// hours-long full crawl.
+func (s *Scraper) FetchPageWithRetries(pageURL string, maxAttempts int) (string, error) {
+	if maxAttempts < 1 {
+		maxAttempts = 1
 	}
-	defer resp.Body.Close()
+	var lastErr error
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		if attempt > 0 {
+			// Exponential backoff: 500ms, 1s, 2s ...
+			backoff := time.Duration(500*(1<<(attempt-1))) * time.Millisecond
+			if backoff > 5*time.Second {
+				backoff = 5 * time.Second
+			}
+			time.Sleep(backoff)
+		}
 
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("fetch %s: status %d", pageURL, resp.StatusCode)
+		req, err := http.NewRequest("GET", pageURL, nil)
+		if err != nil {
+			return "", fmt.Errorf("create request for %s: %w", pageURL, err)
+		}
+		req.Header.Set("User-Agent", "GameModMaster/1.0 (Desktop App)")
+
+		resp, err := s.client.Do(req)
+		if err != nil {
+			lastErr = fmt.Errorf("fetch %s: %w", pageURL, err)
+			continue // retry network errors
+		}
+
+		// 4xx: definitive, do not retry.
+		if resp.StatusCode >= 400 && resp.StatusCode < 500 {
+			resp.Body.Close()
+			return "", fmt.Errorf("fetch %s: status %d", pageURL, resp.StatusCode)
+		}
+		// 5xx: server-side, worth retrying.
+		if resp.StatusCode >= 500 {
+			resp.Body.Close()
+			lastErr = fmt.Errorf("fetch %s: status %d", pageURL, resp.StatusCode)
+			continue
+		}
+		if resp.StatusCode != http.StatusOK {
+			resp.Body.Close()
+			return "", fmt.Errorf("fetch %s: status %d", pageURL, resp.StatusCode)
+		}
+
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			lastErr = fmt.Errorf("read body from %s: %w", pageURL, err)
+			continue
+		}
+		return string(body), nil
 	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("read body from %s: %w", pageURL, err)
-	}
-
-	return string(body), nil
+	return "", lastErr
 }
 
 // FetchListPage fetches and parses a list page (page 1, 2, etc.).
@@ -246,24 +300,29 @@ func (s *Scraper) SearchRemote(query string) ([]*model.Game, error) {
 
 	// Expand a (possibly Chinese) query into English names via the mapping.
 	if s.mappingService != nil {
-		seen := map[string]bool{strings.ToLower(q): true}
-		for en := range s.mappingService.GetMapping() {
-			// en here is the lowercased english key
-			zh, _ := s.mappingService.Lookup(en)
+		qLow := strings.ToLower(q)
+		seen := map[string]bool{qLow: true}
+
+		// GetMapping() is lowercase english name -> chinese. For each entry
+		// whose Chinese contains the query (or vice-versa), the english name
+		// becomes a candidate search term.
+		for en, zh := range s.mappingService.GetMapping() {
+			if zh == "" || zh == en {
+				continue
+			}
 			zhLow := strings.ToLower(zh)
-			qLow := strings.ToLower(q)
-			if zh != "" && zh != en && (strings.Contains(zhLow, qLow) || strings.Contains(qLow, zhLow)) {
-				if !seen[strings.ToLower(en)] {
+			if strings.Contains(zhLow, qLow) || strings.Contains(qLow, zhLow) {
+				if !seen[en] {
 					terms = append(terms, en)
-					seen[strings.ToLower(en)] = true
+					seen[en] = true
 				}
 			}
 		}
-		// Also check aliases (alias -> zh)
+		// Aliases: alias (chinese or english) -> english name (here stored as
+		// alias -> chinese, so we mirror the same logic).
 		for alias, zh := range s.mappingService.GetAliases() {
 			aliasLow := strings.ToLower(alias)
 			zhLow := strings.ToLower(zh)
-			qLow := strings.ToLower(q)
 			if strings.Contains(aliasLow, qLow) || strings.Contains(zhLow, qLow) {
 				if !seen[aliasLow] {
 					terms = append(terms, alias)
@@ -308,9 +367,21 @@ func (s *Scraper) SearchRemote(query string) ([]*model.Game, error) {
 // FetchAndSave fetches a list page, then crawls each game's detail page to
 // collect trainer versions, and persists everything to the DB.
 //
-// Flow: list page -> for each game, fetch detail -> upsert game + its trainers.
-// Returns (gamesSaved, trainersSaved).
+// Flow: list page -> for each game, fetch detail concurrently -> upsert game +
+// its trainers. Returns (gamesSaved, trainersSaved, detailErrors). The third
+// return value is the number of games whose detail page failed to fetch
+// (network/parse); the call still returns nil error in that case so a single
+// flaky detail page does not abort the whole crawl.
 func (s *Scraper) FetchAndSave(page int) (int, int, error) {
+	return s.FetchAndSaveOpts(page, defaultDetailConcurrency)
+}
+
+// FetchAndSaveOpts is like FetchAndSave but lets the caller pick the worker
+// count for concurrent detail-page fetches (must be >= 1).
+func (s *Scraper) FetchAndSaveOpts(page, concurrency int) (int, int, error) {
+	if concurrency < 1 {
+		concurrency = 1
+	}
 	games, err := s.FetchListPage(page)
 	if err != nil {
 		return 0, 0, err
@@ -325,41 +396,81 @@ func (s *Scraper) FetchAndSave(page int) (int, int, error) {
 		return 0, 0, fmt.Errorf("save games from page %d: %w", page, err)
 	}
 
-	// Now fetch detail pages and collect trainers, attaching game IDs.
-	var allTrainers []*model.Trainer
+	type detailResult struct {
+		game     *model.Game
+		storedID int32
+		page     *TrainerPage
+		err      error
+	}
+
+	// Resolve DB-assigned IDs up front (cheap local lookups).
+	type job struct {
+		game    *model.Game
+		stored  *model.Game
+	}
+	jobs := make([]job, 0, len(games))
 	for _, g := range games {
-		// Resolve the DB-assigned ID for this game (by source_id).
 		stored, err := s.gameRepo.GetBySourceID(g.SourceID)
 		if err != nil || stored == nil {
 			log.Printf("[Scraper] skip detail for %q: cannot resolve game id (err=%v)", g.SourceID, err)
 			continue
 		}
+		jobs = append(jobs, job{game: g, stored: stored})
+	}
 
-		page, err := s.FetchDetailPage(g.SourceURL)
-		if err != nil {
-			log.Printf("[Scraper] detail fetch failed for %q: %v", g.SourceURL, err)
+	// Concurrent detail-page fetch. Bounded worker pool keeps us polite to
+	// the source site while still finishing a ~730-game crawl in well under
+	// a minute instead of ~5 minutes.
+	results := make(chan detailResult, len(jobs))
+	jobCh := make(chan job, len(jobs))
+	for _, j := range jobs {
+		jobCh <- j
+	}
+	close(jobCh)
+
+	var wg sync.WaitGroup
+	for w := 0; w < concurrency; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := range jobCh {
+				dp, err := s.FetchDetailPage(j.game.SourceURL)
+				results <- detailResult{game: j.game, storedID: j.stored.ID, page: dp, err: err}
+			}
+		}()
+	}
+	wg.Wait()
+	close(results)
+
+	var allTrainers []*model.Trainer
+	detailErrors := 0
+	for r := range results {
+		if r.err != nil {
+			log.Printf("[Scraper] detail fetch failed for %q: %v", r.game.SourceURL, r.err)
+			detailErrors++
 			continue
 		}
-
+		// Resolve the game record to refresh its updated_at / options_num.
+		stored, err := s.gameRepo.GetBySourceID(r.game.SourceID)
+		if err != nil || stored == nil {
+			detailErrors++
+			continue
+		}
 		// If the detail page gave us a fresher updated_at, bump the game record.
-		if page.UpdatedAt > 0 && page.UpdatedAt > stored.UpdatedAt {
-			stored.UpdatedAt = page.UpdatedAt
-			if page.Options != "" {
-				if n := parseOptionsNum(page.Options); n > 0 {
+		if r.page.UpdatedAt > 0 && r.page.UpdatedAt > stored.UpdatedAt {
+			stored.UpdatedAt = r.page.UpdatedAt
+			if r.page.Options != "" {
+				if n := parseOptionsNum(r.page.Options); n > 0 {
 					stored.OptionsNum = n
 				}
 			}
 			_ = s.gameRepo.BatchUpsert([]*model.Game{stored})
 		}
 
-		for _, t := range page.Trainers {
+		for _, t := range r.page.Trainers {
 			t.GameID = stored.ID
 			allTrainers = append(allTrainers, t)
 		}
-
-		// Polite delay between detail requests (kept short so a full
-		// ~700-game crawl finishes in a reasonable time).
-		time.Sleep(150 * time.Millisecond)
 	}
 
 	if len(allTrainers) > 0 {
@@ -368,7 +479,18 @@ func (s *Scraper) FetchAndSave(page int) (int, int, error) {
 		}
 	}
 
+	// Stash detail error count so callers that care (e.g. the full crawler)
+	// can surface it via the dedicated DetailErrorCount field on the result.
+	s.lastDetailErrors = detailErrors
+
 	return len(games), len(allTrainers), nil
+}
+
+// LastDetailErrors returns the number of detail-page failures seen during the
+// most recent FetchAndSave / FetchAndSaveOpts call on this scraper. Safe to
+// read after FetchAndSave returns.
+func (s *Scraper) LastDetailErrors() int {
+	return s.lastDetailErrors
 }
 
 // SearchAndSave searches for trainers, then crawls detail pages for any games

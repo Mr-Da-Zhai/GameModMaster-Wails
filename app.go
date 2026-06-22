@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -48,12 +49,32 @@ type AppService struct {
 	refreshMu     sync.Mutex
 	refreshing    bool
 	refreshResult string
+
+	// cancelRefresh is set non-nil while a refresh is running; cancelling
+	// closes it to signal the crawler loop to stop after the current page.
+	// Guarded by refreshMu.
+	cancelRefresh chan struct{}
+	// cancelDetail is set non-nil while a GetTrainerDetail background fetch
+	// is running; cancelling closes it to abort the in-flight HTTP request.
+	cancelDetailMu sync.Mutex
+	cancelDetail   map[int32]context.CancelFunc
+	// downloadCancel holds cancel funcs for in-flight downloads, keyed by
+	// trainer id. Guarded by downloadCancelMu.
+	downloadCancelMu sync.Mutex
+	downloadCancel   map[int32]context.CancelFunc
+
+	// detailFetching atomically tracks which game ids have an in-flight
+	// lazy detail fetch (used by the UI to show a spinner per row).
+	detailFetching sync.Map // map[int32]struct{}
 }
 
 // NewAppService creates and initializes the AppService.
 // embeddedMapping is the name_mapping.json data embedded in the binary.
 func NewAppService(embeddedMapping []byte) *AppService {
-	a := &AppService{}
+	a := &AppService{
+		cancelDetail:   make(map[int32]context.CancelFunc),
+		downloadCancel: make(map[int32]context.CancelFunc),
+	}
 
 	// 1. Determine data directory
 	a.resolveDataDir()
@@ -650,6 +671,10 @@ func (a *AppService) DeleteTrainer(trainerID int32) error {
 // RefreshData fetches latest data from flingtrainer.com asynchronously.
 // It returns immediately; progress and completion are reported via the
 // "refresh:progress" event. Use IsRefreshing() / GetRefreshResult() to poll.
+//
+// If a previous crawl was interrupted, this resumes from the last page that
+// was successfully saved (so closing and reopening the app doesn't restart
+// the full crawl from page 1). Once finished, the resume marker is cleared.
 func (a *AppService) RefreshData() error {
 	a.refreshMu.Lock()
 	if a.refreshing {
@@ -658,9 +683,29 @@ func (a *AppService) RefreshData() error {
 	}
 	a.refreshing = true
 	a.refreshResult = ""
+	a.cancelRefresh = make(chan struct{})
 	a.refreshMu.Unlock()
 
 	go a.runRefresh()
+	return nil
+}
+
+// CancelRefresh asks an in-progress crawl to stop after the current page.
+// Returns an error if no crawl is running. The summary emitted to the UI on
+// completion is annotated with "(已取消)" so the user knows it was not a
+// normal finish.
+func (a *AppService) CancelRefresh() error {
+	a.refreshMu.Lock()
+	defer a.refreshMu.Unlock()
+	if !a.refreshing || a.cancelRefresh == nil {
+		return fmt.Errorf("no refresh in progress")
+	}
+	select {
+	case <-a.cancelRefresh:
+		// already closed
+	default:
+		close(a.cancelRefresh)
+	}
 	return nil
 }
 
@@ -674,15 +719,22 @@ func (a *AppService) RefreshDataSync() (string, error) {
 		return "", fmt.Errorf("refresh already in progress")
 	}
 	a.refreshing = true
+	a.cancelRefresh = make(chan struct{})
 	a.refreshMu.Unlock()
 	defer func() {
 		a.refreshMu.Lock()
 		a.refreshing = false
+		a.cancelRefresh = nil
 		a.refreshMu.Unlock()
 	}()
 
-	// pageCount <= 0 means "fetch everything".
-	return a.doFetch(1, 0)
+	// pageCount <= 0 means "fetch everything". Cancellation is impossible
+	// here (no event loop), so pass a never-closed channel.
+	summary, err, detailErrors, _ := a.doFetch(1, 0, make(chan struct{}))
+	if detailErrors > 0 {
+		summary = fmt.Sprintf("%s · %d 个详情页获取失败", summary, detailErrors)
+	}
+	return summary, err
 }
 
 // runRefresh executes the fetch off the main goroutine.
@@ -690,42 +742,73 @@ func (a *AppService) runRefresh() {
 	defer func() {
 		a.refreshMu.Lock()
 		a.refreshing = false
+		a.cancelRefresh = nil
 		a.refreshMu.Unlock()
 	}()
 
+	// Snapshot the cancel channel under the lock; doFetch reads it locally.
+	a.refreshMu.Lock()
+	cancelCh := a.cancelRefresh
+	a.refreshMu.Unlock()
+
+	// Resume from the last saved page if a previous crawl was interrupted.
+	startPage := 1
+	if saved := a.getKV("resume_from_page"); saved != "" {
+		if n, err := strconv.Atoi(saved); err == nil && n > 1 {
+			startPage = n
+			log.Printf("[AppService] resuming crawl from page %d", startPage)
+		}
+	}
+
 	// Always fetch the full library so search covers every game.
-	summary, err := a.doFetch(1, 0)
-	if err != nil {
+	summary, err, detailErrors, cancelled := a.doFetch(startPage, 0, cancelCh)
+	if cancelled {
+		summary = fmt.Sprintf("%s (已取消 — 进度已保存，下次将续传)", summary)
+	} else if err != nil {
 		log.Printf("[AppService] Refresh error: %v", err)
 		summary = fmt.Sprintf("%s (部分出错: %v)", summary, err)
+	}
+	if !cancelled && detailErrors > 0 {
+		summary = fmt.Sprintf("%s · %d 个详情页获取失败", summary, detailErrors)
 	}
 	a.refreshMu.Lock()
 	a.refreshResult = summary
 	a.refreshMu.Unlock()
 
+	// Crawl finished (not cancelled) — clear the resume marker so the next
+	// manual refresh starts fresh. If cancelled, keep the marker so the next
+	// RefreshData() picks up where we left off.
+	if !cancelled {
+		_ = a.setKV("resume_from_page", "")
+	}
+
 	// Notify the frontend that the refresh finished.
 	a.emitEvent(EventRefreshProgress, map[string]interface{}{
-		"done":    true,
-		"summary": summary,
+		"done":          true,
+		"cancelled":     cancelled,
+		"summary":       summary,
+		"detail_errors": detailErrors,
 	})
 }
 
 // doFetch performs the multi-page crawl with progress events.
 // pageCount <= 0 means "probe and fetch all pages".
-func (a *AppService) doFetch(startPage, pageCount int) (string, error) {
+// cancelCh, if closed, signals the loop to stop after the current page.
+// Returns (summary, firstError, totalDetailErrors, cancelled).
+func (a *AppService) doFetch(startPage, pageCount int, cancelCh chan struct{}) (string, error, int, bool) {
 	total := pageCount
 	if total <= 0 {
 		// Probe the site for the real last page once, up front.
 		probed, err := a.scraperService.CountTotalPages()
 		if err != nil {
 			log.Printf("[AppService] count pages failed: %v", err)
-			probed = 49 // sensible fallback
+			probed = 49 // sensible fallback (kept in sync with current site size)
 		}
 		total = probed - startPage + 1
 		if total < 1 {
 			total = 1
 		}
-		log.Printf("[AppService] full crawl: %d pages", total)
+		log.Printf("[AppService] full crawl: %d pages (start=%d)", total, startPage)
 		// Tell the UI how many pages to expect.
 		a.emitEvent(EventRefreshProgress, map[string]interface{}{
 			"total":   total,
@@ -736,13 +819,28 @@ func (a *AppService) doFetch(startPage, pageCount int) (string, error) {
 
 	totalGames := 0
 	totalTrainers := 0
+	totalDetailErrors := 0
 	var firstErr error
+	cancelled := false
 
 	for i := 0; i < total; i++ {
+		// Honor a cancel signal BEFORE starting the next page.
+		select {
+		case <-cancelCh:
+			cancelled = true
+		default:
+		}
+		if cancelled {
+			break
+		}
+
 		page := startPage + i
 		games, trainers, err := a.scraperService.FetchAndSave(page)
 		totalGames += games
 		totalTrainers += trainers
+		if derrs := a.scraperService.LastDetailErrors(); derrs > 0 {
+			totalDetailErrors += derrs
+		}
 		if err != nil {
 			if firstErr == nil {
 				firstErr = err
@@ -750,18 +848,26 @@ func (a *AppService) doFetch(startPage, pageCount int) (string, error) {
 			log.Printf("[AppService] page %d: %v", page, err)
 		}
 
+		// Persist the resume marker AFTER each successful page save so a crash
+		// or app-quit during a long crawl lets us pick up where we left off.
+		// We set it to the NEXT page (only if there is one).
+		if page < startPage+total-1 {
+			_ = a.setKV("resume_from_page", strconv.Itoa(page+1))
+		}
+
 		// Emit progress on every page so the UI bar advances smoothly.
 		a.emitEvent(EventRefreshProgress, map[string]interface{}{
-			"page":     page,
-			"total":    total,
-			"current":  i + 1,
-			"games":    totalGames,
-			"trainers": totalTrainers,
+			"page":          page,
+			"total":         total,
+			"current":       i + 1,
+			"games":         totalGames,
+			"trainers":      totalTrainers,
+			"detail_errors": totalDetailErrors,
 		})
 
-		// Refresh the in-memory index periodically (every 5 pages) so the home
+		// Refresh the in-memory index periodically (every 3 pages) so the home
 		// grid populates incrementally instead of staying empty for minutes.
-		if (i+1)%5 == 0 {
+		if (i+1)%3 == 0 {
 			a.refreshIndex()
 		}
 	}
@@ -770,7 +876,7 @@ func (a *AppService) doFetch(startPage, pageCount int) (string, error) {
 	a.refreshIndex()
 
 	summary := fmt.Sprintf("已更新 %d 个游戏, %d 个修改器", totalGames, totalTrainers)
-	return summary, firstErr
+	return summary, firstErr, totalDetailErrors, cancelled
 }
 
 // requestContext returns the app context if available, else background.
