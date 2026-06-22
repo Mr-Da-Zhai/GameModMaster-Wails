@@ -12,8 +12,6 @@ export const en = {
   home: {
     title: 'Game Library',
     searchPlaceholder: 'Search games (Chinese or English; instant local match)…',
-    searchRemote: 'Search "{query}" online for more…',
-    remoteDone: 'Online search done, {count} results',
     countSuffix: '',
     refresh: 'Refresh data',
     cancelRefresh: 'Cancel refresh (progress is saved)',

@@ -19,7 +19,6 @@ import {
   PlayOutline,
   CheckmarkCircle,
   CloseCircleOutline,
-  GlobeOutline,
 } from '@vicons/ionicons5'
 import { useI18n } from 'vue-i18n'
 import { useTrainerStore, type GameEntry, type Suggestion } from '../stores/trainer'
@@ -32,10 +31,6 @@ const { toast } = useFeedback()
 
 const searchValue = ref('')
 let suggestTimer: ReturnType<typeof setTimeout> | null = null
-
-// Sentinel value the dropdown emits when the user picks the
-// "🔍 联网搜索更多..." row. Distinct from any real game id.
-const REMOTE_MARKER = '__remote__'
 
 onMounted(() => {
   store.bindEvents()
@@ -63,87 +58,53 @@ function handleSearchInput(value: string) {
   }, 150)
 }
 
-// Build NAutoComplete options: real suggestions first, then a trailing
-// "联网搜索更多" row that triggers an explicit remote query.
-// The option's label is a plain string (Naive UI 1.x AutoCompleteOption
-// requires string); we carry the full suggestion in a side map keyed by
-// the option value so the render-label slot and select handler can reach it.
-const suggestionsByValue = ref<Record<string, Suggestion>>({})
+// Build NAutoComplete options. Each option's label is the localized name
+// (for accessibility / the raw value), but we render a richer row via
+// renderLabel. The option value is the display name string — picking it
+// fills the input with that name, then we run a search automatically.
+// The backend's SearchTrainers transparently handles local-first →
+// remote-fallback → empty.
+const suggestionsByLabel = ref<Record<string, Suggestion>>({})
 
 const searchOptions = computed<AutoCompleteOption[]>(() => {
   const map: Record<string, Suggestion> = {}
   const opts: AutoCompleteOption[] = store.suggestions.map((s) => {
-    const v = String(s.id)
-    map[v] = s
-    return { label: s.display_name || s.name_en, value: v }
+    const label = s.display_name || s.name_en
+    map[label] = s
+    return { label, value: label }
   })
-  // Always offer the remote escape hatch when there's a query, even if
-  // we have local hits (the user may be looking for something newer than
-  // the local library knows about).
-  if (searchValue.value.trim().length >= 2) {
-    opts.push({ label: REMOTE_MARKER, value: REMOTE_MARKER })
-  }
-  suggestionsByValue.value = map
+  suggestionsByLabel.value = map
   return opts
 })
 
-// Custom render for an option's label (cover thumb + names + opts count).
-// Receives the option value; we look up the suggestion from the side map.
+// Custom render for an option: localized name + english subtitle (small,
+// muted) — pure name completion, not a game card.
 function renderLabel(option: AutoCompleteOption) {
-  const value = String(option.value)
-  if (value === REMOTE_MARKER) {
-    return h(
-      'div',
-      { class: 'sug-remote' },
-      [
-        h(NIcon, { size: 14, class: 'sug-remote-ic' }, { default: () => h(GlobeOutline) }),
-        h('span', t('home.searchRemote', { query: searchValue.value.trim() })),
-      ],
-    )
+  const label = String(option.value)
+  const s = suggestionsByLabel.value[label]
+  if (!s) return label
+  const children = [h('div', { class: 'sug-name' }, s.display_name || s.name_en)]
+  if (s.name_local && s.name_local !== s.display_name) {
+    children.push(h('div', { class: 'sug-sub' }, s.name_en))
   }
-  const s = suggestionsByValue.value[value]
-  if (!s) return String(option.label)
-  return h('div', { class: 'sug-row' }, [
-    h('img', {
-      src: s.cover_url || '',
-      class: 'sug-thumb',
-      loading: 'lazy',
-      onError: (e: Event) => ((e.target as HTMLImageElement).style.visibility = 'hidden'),
-    }),
-    h('div', { class: 'sug-text' }, [
-      h('div', { class: 'sug-name' }, s.display_name || s.name_en),
-      s.name_local && s.name_local !== s.display_name
-        ? h('div', { class: 'sug-sub' }, s.name_en)
-        : null,
-    ]),
-    s.options_num ? h('div', { class: 'sug-opts' }, `${s.options_num}项`) : null,
-  ])
+  return h('div', { class: 'sug-row' }, children)
 }
 
-// User selected a dropdown row (via click or Enter after keyboard nav).
-// If it's a real game → jump straight to detail. If it's the remote
-// marker → fire the explicit remote search.
+// User picked a suggestion (click or Enter on highlighted row). Fill the
+// input with the chosen name and run a search. The backend will use local
+// data first (the suggestion came from local, so this is instant) and
+// fall back to remote only if needed.
 function handleSearchSelect(value: string) {
   if (suggestTimer) clearTimeout(suggestTimer)
-  if (value === REMOTE_MARKER) {
-    const q = searchValue.value.trim()
-    if (!q) return
-    store.searchRemote(q).then(() => {
-      toast.success(t('home.remoteDone', { count: store.trainers.length }))
-    })
-    return
-  }
-  // Real game selected — jump to detail page directly.
-  const id = Number(value)
-  if (id > 0) {
-    router.push({ name: 'detail', params: { id } })
-    // Clear the dropdown so it doesn't reappear on return.
-    store.clearSuggestions()
+  searchValue.value = value
+  store.clearSuggestions()
+  if (value.trim()) {
+    store.searchTrainers(value)
   }
 }
 
-// Enter pressed without selecting a dropdown row → run a local full
-// search (not remote; the user can pick the remote row explicitly).
+// Enter pressed without picking a dropdown row → run a search with the
+// current input. Backend handles local→remote→empty automatically.
 function handleSearchEnter() {
   if (suggestTimer) clearTimeout(suggestTimer)
   const q = searchValue.value.trim()
@@ -207,7 +168,7 @@ const refreshPercent = computed(() => {
 })
 
 const isEmpty = computed(
-  () => !store.loading && !store.refreshing && !store.remoteLoading && store.trainers.length === 0
+  () => !store.loading && !store.refreshing && store.trainers.length === 0
 )
 
 function onCardAction(e: Event, row: GameEntry) {
@@ -254,13 +215,6 @@ function actionLabel(status: number) {
             <NIcon :component="SearchOutline" class="search-ic" />
           </template>
         </NAutoComplete>
-        <NIcon
-          v-if="store.remoteLoading"
-          size="14"
-          class="remote-spinner"
-        >
-          <RefreshOutline />
-        </NIcon>
       </div>
       <div class="head-right">
         <NButton
@@ -465,41 +419,18 @@ export default { name: 'HomeView' }
   color: var(--text-3);
 }
 
-/* Remote-search spinner shown next to the box while a remote query is in flight */
-.remote-spinner {
-  color: var(--accent);
-  animation: spin 0.9s linear infinite;
-}
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
 /* Autocomplete suggestion rows — these live in a teleport'd dropdown so the
-   styles must be global (non-scoped). The :deep() wrapper targets them from
-   inside the scoped style block. */
+   styles must reach outside the scoped block via :deep(). Each row is now a
+   pure name-completion item (localized name + english subtitle), not a game
+   card. */
 :deep(.sug-row) {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 4px;
-}
-:deep(.sug-thumb) {
-  width: 30px;
-  height: 40px;
-  border-radius: 4px;
-  object-fit: cover;
-  flex-shrink: 0;
-  background: var(--surface-2);
-}
-:deep(.sug-text) {
-  flex: 1;
-  min-width: 0;
-  display: flex;
   flex-direction: column;
+  padding: 6px 4px;
 }
 :deep(.sug-name) {
   font-size: 13.5px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text-1);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -511,26 +442,6 @@ export default { name: 'HomeView' }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-:deep(.sug-opts) {
-  font-size: 11px;
-  color: var(--accent);
-  background: var(--accent-glow);
-  padding: 2px 7px;
-  border-radius: 10px;
-  flex-shrink: 0;
-}
-:deep(.sug-remote) {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 4px;
-  font-size: 13px;
-  color: var(--accent);
-  border-top: 1px dashed var(--border);
-}
-:deep(.sug-remote-ic) {
-  color: var(--accent);
 }
 
 .error-bar {

@@ -147,8 +147,6 @@ export const useTrainerStore = defineStore('trainer', () => {
   // Autocomplete suggestions for the search box (instant, local-only).
   const suggestions = ref<Suggestion[]>([])
   const suggestionsLoading = ref(false)
-  // True while a remote ("联网搜索更多") request is in flight.
-  const remoteLoading = ref(false)
 
   let listenersBound = false
   // Reload the home grid every N pages during a crawl so games appear
@@ -256,29 +254,6 @@ export const useTrainerStore = defineStore('trainer', () => {
 
   function clearSuggestions() {
     suggestions.value = []
-  }
-
-  // searchRemote is the explicit escape hatch: called when the user clicks
-  // the "🔍 联网搜索更多..." item in the dropdown. Hits flingtrainer.com,
-  // may take a few seconds.
-  async function searchRemote(query: string) {
-    const q = query.trim()
-    if (!q) return
-    remoteLoading.value = true
-    lastError.value = ''
-    searchQuery.value = q
-    try {
-      const result = await AppService.SearchRemoteExplicit(q)
-      trainers.value = toArray(result)
-      currentPage.value = 1
-      totalCount.value = trainers.value.length
-    } catch (e) {
-      lastError.value = `联网搜索失败: ${String(e)}`
-      // eslint-disable-next-line no-console
-      console.error('[searchRemote]', e)
-    } finally {
-      remoteLoading.value = false
-    }
   }
 
   async function refreshData() {
@@ -391,12 +366,10 @@ export const useTrainerStore = defineStore('trainer', () => {
     lastError,
     suggestions,
     suggestionsLoading,
-    remoteLoading,
     loadTrainers,
     searchTrainers,
     loadSuggestions,
     clearSuggestions,
-    searchRemote,
     refreshData,
     refreshDataSync,
     onRefreshComplete,

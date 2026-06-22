@@ -13,8 +13,6 @@ export const zhCN = {
   home: {
     title: '游戏库',
     searchPlaceholder: '搜索游戏（中英文，本地即时匹配）…',
-    searchRemote: '联网搜索 "{query}" 更多…',
-    remoteDone: '联网搜索完成，找到 {count} 条',
     countSuffix: '款',
     refresh: '刷新数据',
     cancelRefresh: '取消刷新（进度已保存）',

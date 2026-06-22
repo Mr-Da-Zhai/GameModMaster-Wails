@@ -210,24 +210,6 @@ export function SaveSettings(settings: { [_ in string]?: any }): $CancellablePro
 }
 
 /**
- * SearchRemoteExplicit performs a LIVE search against flingtrainer.com.
- * 
- * This is the escape hatch used when the local library doesn't have what
- * the user wants (the dropdown's "🔍 联网搜索更多..." item). It resolves a
- * Chinese query to English titles via the name mapping, queries the site,
- * caches the results locally, and rebuilds the in-memory index so subsequent
- * detail lookups resolve.
- * 
- * Because it's user-initiated (not on every keystroke), the multi-second
- * latency is acceptable.
- */
-export function SearchRemoteExplicit(query: string): $CancellablePromise<{ [_ in string]?: any }[]> {
-    return $Call.ByID(2707682292, query).then(($result: any) => {
-        return $$createType1($result);
-    });
-}
-
-/**
  * SearchSuggestions returns up to `limit` lightweight autocomplete candidates
  * ranked by match quality (exact > prefix > substring). Used by the search
  * box dropdown so the user sees candidates as they type. Pure in-memory;
@@ -243,18 +225,17 @@ export function SearchSuggestions(query: string, limit: number): $CancellablePro
 }
 
 /**
- * SearchTrainers performs a LOCAL-first search.
+ * SearchTrainers performs an automatic local-first search.
  * 
- * The local DB now holds the full library (~731 games after a full crawl),
- * so the common case is an instant in-memory lookup that hits no network
- * and writes nothing. Only when the user explicitly wants to look beyond
- * the local library do we hit the remote site — via SearchRemoteExplicit.
+ * Resolution order:
+ *  1. Local in-memory index — instant (< 5ms), covers the ~731 cached games.
+ *  2. If local returns zero matches, silently fall back to a remote search
+ *     against flingtrainer.com (a few seconds). The remote path resolves a
+ *     Chinese query to English titles via the name mapping, fetches results,
+ *     caches them locally, and rebuilds the index so the next lookup is local.
+ *  3. If both return nothing, returns an empty array.
  * 
- * If the local index returns zero matches the result is simply empty; the
- * frontend renders a "🔍 联网搜索更多..." affordance that calls
- * SearchRemoteExplicit on click. This keeps typing responsive: every
- * keystroke resolves in < 5ms instead of firing 5 HTTP requests + a DB
- * upsert + a full index rebuild.
+ * The user never picks "local vs remote" — the backend decides transparently.
  */
 export function SearchTrainers(query: string): $CancellablePromise<{ [_ in string]?: any }[]> {
     return $Call.ByID(903045308, query).then(($result: any) => {

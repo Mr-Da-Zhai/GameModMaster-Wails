@@ -344,29 +344,51 @@ func (a *AppService) GetTotalGames() int {
 	return len(a.idx.GamesByID)
 }
 
-// SearchTrainers performs a LOCAL-first search.
+// SearchTrainers performs an automatic local-first search.
 //
-// The local DB now holds the full library (~731 games after a full crawl),
-// so the common case is an instant in-memory lookup that hits no network
-// and writes nothing. Only when the user explicitly wants to look beyond
-// the local library do we hit the remote site — via SearchRemoteExplicit.
+// Resolution order:
+//  1. Local in-memory index — instant (< 5ms), covers the ~731 cached games.
+//  2. If local returns zero matches, silently fall back to a remote search
+//     against flingtrainer.com (a few seconds). The remote path resolves a
+//     Chinese query to English titles via the name mapping, fetches results,
+//     caches them locally, and rebuilds the index so the next lookup is local.
+//  3. If both return nothing, returns an empty array.
 //
-// If the local index returns zero matches the result is simply empty; the
-// frontend renders a "🔍 联网搜索更多..." affordance that calls
-// SearchRemoteExplicit on click. This keeps typing responsive: every
-// keystroke resolves in < 5ms instead of firing 5 HTTP requests + a DB
-// upsert + a full index rebuild.
+// The user never picks "local vs remote" — the backend decides transparently.
 func (a *AppService) SearchTrainers(query string) ([]map[string]interface{}, error) {
 	q := strings.TrimSpace(query)
 	if q == "" {
 		return a.GetTrainers(1, 50)
 	}
 
-	games := a.idx.SearchGames(q, 50)
-	results := make([]map[string]interface{}, 0, len(games))
-	for _, g := range games {
+	// 1. Local first.
+	if games := a.idx.SearchGames(q, 50); len(games) > 0 {
+		results := make([]map[string]interface{}, 0, len(games))
+		for _, g := range games {
+			results = append(results, a.buildGameEntry(g))
+		}
+		return results, nil
+	}
+
+	// 2. Local miss → automatic remote fallback.
+	remoteGames, err := a.scraperService.SearchRemote(q)
+	if err != nil {
+		// Network errors here are non-fatal — just return what we have (empty).
+		log.Printf("[AppService] remote fallback for %q failed: %v", q, err)
+		return []map[string]interface{}{}, nil
+	}
+	// Rebuild the index so the freshly cached games are queryable by id.
+	a.refreshIndex()
+
+	results := make([]map[string]interface{}, 0, len(remoteGames))
+	for _, g := range remoteGames {
+		// Re-read from index to pick up the DB-assigned ID after upsert.
+		if stored := a.idx.GamesByNameEN[strings.ToLower(g.NameEN)]; stored != nil {
+			g = stored
+		}
 		results = append(results, a.buildGameEntry(g))
 	}
+	// 3. Empty result is fine — the UI shows "无数据".
 	return results, nil
 }
 
@@ -405,43 +427,6 @@ func (a *AppService) SearchSuggestions(query string, limit int) ([]map[string]in
 		})
 	}
 	return out, nil
-}
-
-// SearchRemoteExplicit performs a LIVE search against flingtrainer.com.
-//
-// This is the escape hatch used when the local library doesn't have what
-// the user wants (the dropdown's "🔍 联网搜索更多..." item). It resolves a
-// Chinese query to English titles via the name mapping, queries the site,
-// caches the results locally, and rebuilds the in-memory index so subsequent
-// detail lookups resolve.
-//
-// Because it's user-initiated (not on every keystroke), the multi-second
-// latency is acceptable.
-func (a *AppService) SearchRemoteExplicit(query string) ([]map[string]interface{}, error) {
-	q := strings.TrimSpace(query)
-	if q == "" {
-		return []map[string]interface{}{}, nil
-	}
-
-	games, err := a.scraperService.SearchRemote(q)
-	if err != nil {
-		return nil, fmt.Errorf("remote search: %w", err)
-	}
-
-	// Rebuild the in-memory index so the freshly cached games are queryable
-	// (needed for detail/download flows that go through the index by ID).
-	a.refreshIndex()
-
-	results := make([]map[string]interface{}, 0, len(games))
-	for _, g := range games {
-		// Re-read from index to pick up the DB-assigned ID after upsert.
-		if stored := a.idx.GamesByNameEN[strings.ToLower(g.NameEN)]; stored != nil {
-			g = stored
-		}
-		results = append(results, a.buildGameEntry(g))
-	}
-
-	return results, nil
 }
 
 // GetTrainerDetail returns detail for a specific game (all trainer versions).
