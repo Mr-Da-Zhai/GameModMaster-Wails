@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { onMounted, ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
 import {
   NButton,
   NIcon,
@@ -15,7 +14,6 @@ import * as AppService from '../../bindings/GameModMaster/appservice'
 import { useFeedback } from '../composables/useConfirm'
 import type { DownloadedTrainer } from '../stores/trainer'
 
-const router = useRouter()
 const { confirm, toast } = useFeedback()
 const trainers = ref<DownloadedTrainer[]>([])
 const loading = ref(false)
@@ -64,8 +62,12 @@ async function handleDelete(t: DownloadedTrainer) {
   }
 }
 
+// Clicking a card launches the trainer directly (this page IS the
+// "installed trainers" view — the card click shouldn't navigate away to
+// detail). The launch + delete buttons in the overlay stop propagation so
+// they don't double-fire.
 function openDetail(t: DownloadedTrainer) {
-  router.push({ name: 'detail', params: { id: t.game_id } })
+  handleLaunch(t.id, t.game_name)
 }
 
 const isEmpty = computed(() => !loading.value && trainers.value.length === 0)
@@ -106,7 +108,7 @@ const isEmpty = computed(() => !loading.value && trainers.value.length === 0)
                 {{ t.status === 2 ? '已安装' : '已下载' }}
               </span>
               <div class="overlay">
-                <button v-if="t.status === 2" class="action-btn" @click.stop="handleLaunch(t.id, t.game_name)">
+                <button class="action-btn" @click.stop="handleLaunch(t.id, t.game_name)">
                   <NIcon size="16"><PlayOutline /></NIcon><span>启动</span>
                 </button>
                 <button class="action-btn danger" @click.stop="handleDelete(t)">
@@ -117,7 +119,8 @@ const isEmpty = computed(() => !loading.value && trainers.value.length === 0)
             <div class="info">
               <div class="name" :title="t.game_name">{{ t.game_name || t.game_name_en }}</div>
               <div class="meta">
-                <span>{{ t.version || '-' }}</span>
+                <span v-if="t.version">{{ t.version }}</span>
+                <span v-if="t.game_version" class="ver">{{ t.game_version }}</span>
               </div>
             </div>
           </article>
@@ -278,6 +281,13 @@ export default { name: 'DownloadsView' }
   margin-top: 4px;
   font-size: 11.5px;
   color: var(--text-3);
+  display: flex;
+  gap: 8px;
+}
+.ver {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .empty {
   padding: 80px 0;

@@ -117,4 +117,38 @@ export const en = {
     cancel: 'Cancel',
     confirm: 'Confirm',
   },
+  usage: {
+    title: '📖 Usage Guide (keyboard shortcuts)',
+    intro:
+      "After launching, the trainer opens its own window listing every feature and its hotkey. These are FLiNG's standard bindings (most games are identical; always confirm against the trainer window):",
+    shortcuts: {
+      f1: {
+        label: 'Toggle / mute',
+        desc: 'Turn all features on or off; hold to mute sound prompts',
+      },
+      home: {
+        label: 'Disable all',
+        desc: 'One-key disable for every active feature',
+      },
+      num0: {
+        label: 'Enable all',
+        desc: 'One-key enable for every available feature',
+      },
+      num1to8: {
+        label: 'Feature 1-8',
+        desc: 'Numpad keys 1-8 toggle features 1-8 listed in the trainer window — press once to enable, again to disable',
+      },
+      num9: {
+        label: 'Check update',
+        desc: 'Check whether a newer trainer version exists (some trainers only)',
+      },
+    },
+    notes: {
+      title: '⚠ Notes',
+      version: 'The trainer version MUST match your game version, otherwise it may not work or may crash. Pick the matching one on this page.',
+      order: 'Launch the game first and reach the main menu / a save, THEN launch the trainer (run the trainer as administrator to fix most "not working" issues).',
+      antivirus: 'Trainers are often false-flagged by antivirus. If you downloaded from the official FLiNG site, whitelist it or temporarily disable AV before launching.',
+      oneday: 'Trainers toggle on key PRESS, not key HOLD. Press once to enable, again to disable — the row in the trainer window shows a √ or color change.',
+    },
+  },
 }

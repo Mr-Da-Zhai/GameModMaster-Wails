@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, ref, h } from 'vue'
+import { onMounted, onBeforeUnmount, ref, h, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   NButton,
@@ -17,6 +17,7 @@ import { ArrowBackOutline, DownloadOutline, PlayOutline, GameControllerOutline, 
 import * as AppService from '../../bindings/GameModMaster/appservice'
 import { useTrainerStore } from '../stores/trainer'
 import { useFeedback } from '../composables/useConfirm'
+import UsageGuide from '../components/UsageGuide.vue'
 import type { TrainerDetailResponse, TrainerDetail, GameDetail } from '../stores/trainer'
 
 const route = useRoute()
@@ -113,6 +114,15 @@ async function retryLoad() {
   }
 }
 
+// latestGameVersion surfaces the newest trainer's game-version string (e.g.
+// "Steam Xbox/Game Pass v1.0-v1.12+") for the header card so the user sees
+// at a glance which game build this page targets. Trainers are newest-first
+// by updated_at, so trainers[0] is the latest.
+const latestGameVersion = computed(() => {
+  if (!trainers.value.length) return ''
+  return trainers.value[0]?.game_version || ''
+})
+
 function getStatusInfo(status: number): { label: string; type: 'default' | 'info' | 'success' } {
   switch (status) {
     case 1:
@@ -138,16 +148,36 @@ function formatFileSize(size: number): string {
 }
 
 async function handleDownload(trainerId: number) {
+  // Front-end dedupe: if a download is already in flight (either we have a
+  // progress entry or the backend reports it as downloading), refuse. The
+  // backend also rejects re-entry, but this avoids an extra round-trip and
+  // keeps the button visually disabled.
+  const prog = store.downloadProgress[trainerId]
+  if (prog && !prog.done) {
+    toast.warning('该修改器正在下载中')
+    return
+  }
+  let alreadyDownloading = false
+  try {
+    alreadyDownloading = await AppService.IsDownloading(trainerId)
+  } catch {
+    // Non-fatal — fall through and let the backend reject if needed.
+  }
+  if (alreadyDownloading) {
+    toast.warning('该修改器正在下载中')
+    return
+  }
+
   const ok = await confirm({
     title: '下载修改器',
-    content: '将下载到您设置的下载目录中，下载完成后会自动解压。是否继续？',
+    content: '将下载到您设置的下载目录中，下载完成后会自动解压并标记为已安装。是否继续？',
     type: 'info',
     positiveText: '下载',
   })
   if (!ok) return
   try {
     await AppService.DownloadTrainer(trainerId)
-    toast.success('下载完成')
+    toast.success('下载完成,已自动安装,可点击启动')
     await loadDetail(true)
   } catch (e: any) {
     const msg = String(e?.message || e)
@@ -161,13 +191,9 @@ async function handleDownload(trainerId: number) {
 }
 
 async function handleInstall(trainerId: number) {
-  const ok = await confirm({
-    title: '标记为已安装',
-    content: '确认将此修改器标记为「已安装」？您之后可一键启动。',
-    type: 'info',
-    positiveText: '确认',
-  })
-  if (!ok) return
+  // Legacy: with auto-install, downloads land in StatusInstalled directly
+  // and this handler should never be reachable from the UI. Kept for safety
+  // in case any cached trainer is still in StatusDownloaded.
   try {
     await AppService.InstallTrainer(trainerId)
     toast.success('已标记为已安装')
@@ -263,6 +289,9 @@ const columns: DataTableColumns<TrainerDetail> = [
       const btnProps = { size: 'small' as const, secondary: true }
       const prog = store.downloadProgress[row.id]
       const downloading = !!prog && !prog.done
+      // Status 2 = installed → launch.
+      // Status 1 = downloaded but not installed (only legacy rows) → install.
+      // Status 0 / downloading → download (or progress).
       if (row.status === 2) {
         return h(NButton, { ...btnProps, type: 'success', disabled: downloading, onClick: () => handleLaunch(row.id) }, {
           icon: () => h(NIcon, null, { default: () => h(PlayOutline) }),
@@ -365,6 +394,11 @@ const rowKey = (row: TrainerDetail) => row.id
             <h1 class="game-title">{{ game.display_name || game.name_en }}</h1>
             <div class="game-sub" v-if="game.name_local && game.name_local !== game.display_name">{{ game.name_en }}</div>
             <div class="meta-row">
+              <span v-if="latestGameVersion" class="meta-item">
+                <span class="meta-label">游戏版本</span>
+                <span class="meta-val">{{ latestGameVersion }}</span>
+              </span>
+              <span v-if="latestGameVersion" class="meta-dot">·</span>
               <span class="meta-item"><span class="meta-label">选项</span><span class="meta-val">{{ game.options_num || '-' }}</span></span>
               <span class="meta-dot">·</span>
               <span class="meta-item"><span class="meta-label">更新</span><span class="meta-val">{{ formatDate(game.updated_at) }}</span></span>
@@ -391,6 +425,9 @@ const rowKey = (row: TrainerDetail) => row.id
             />
           </div>
         </div>
+
+        <!-- Usage guide: collapsible Chinese/English keyboard reference -->
+        <UsageGuide v-if="trainers.length > 0" />
       </template>
     </NSpin>
   </div>
