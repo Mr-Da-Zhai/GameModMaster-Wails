@@ -344,17 +344,83 @@ func (a *AppService) GetTotalGames() int {
 	return len(a.idx.GamesByID)
 }
 
-// SearchTrainers performs a LIVE search against flingtrainer.com.
+// SearchTrainers performs a LOCAL-first search.
 //
-// The local DB only caches a subset of games (whatever has been browsed or
-// downloaded), so searching it would miss most of the library. Instead we
-// always query the remote site: a Chinese query is first resolved to its
-// English title via the name mapping, then searched remotely. Results are
-// translated to Chinese display names, cached locally, and returned.
+// The local DB now holds the full library (~731 games after a full crawl),
+// so the common case is an instant in-memory lookup that hits no network
+// and writes nothing. Only when the user explicitly wants to look beyond
+// the local library do we hit the remote site — via SearchRemoteExplicit.
+//
+// If the local index returns zero matches the result is simply empty; the
+// frontend renders a "🔍 联网搜索更多..." affordance that calls
+// SearchRemoteExplicit on click. This keeps typing responsive: every
+// keystroke resolves in < 5ms instead of firing 5 HTTP requests + a DB
+// upsert + a full index rebuild.
 func (a *AppService) SearchTrainers(query string) ([]map[string]interface{}, error) {
 	q := strings.TrimSpace(query)
 	if q == "" {
 		return a.GetTrainers(1, 50)
+	}
+
+	games := a.idx.SearchGames(q, 50)
+	results := make([]map[string]interface{}, 0, len(games))
+	for _, g := range games {
+		results = append(results, a.buildGameEntry(g))
+	}
+	return results, nil
+}
+
+// SearchSuggestions returns up to `limit` lightweight autocomplete candidates
+// ranked by match quality (exact > prefix > substring). Used by the search
+// box dropdown so the user sees candidates as they type. Pure in-memory;
+// never hits the network or the DB.
+//
+// Each item carries only the fields the dropdown needs (id, names, cover,
+// options) — no trainer/state construction — so a 10-item call is cheap.
+func (a *AppService) SearchSuggestions(query string, limit int) ([]map[string]interface{}, error) {
+	q := strings.TrimSpace(query)
+	if q == "" {
+		return []map[string]interface{}{}, nil
+	}
+	if limit <= 0 || limit > 20 {
+		limit = 10
+	}
+
+	suggestions := a.idx.SearchSuggestions(q, limit)
+	out := make([]map[string]interface{}, 0, len(suggestions))
+	for _, s := range suggestions {
+		g := s.Game
+		displayName := g.NameLocal
+		if displayName == "" {
+			displayName = g.NameEN
+		}
+		out = append(out, map[string]interface{}{
+			"id":           g.ID,
+			"name_en":      g.NameEN,
+			"name_local":   g.NameLocal,
+			"display_name": displayName,
+			"cover_url":    g.CoverURL,
+			"options_num":  g.OptionsNum,
+			"score":        s.Score,
+		})
+	}
+	return out, nil
+}
+
+// SearchRemoteExplicit performs a LIVE search against flingtrainer.com.
+//
+// This is the escape hatch used when the local library doesn't have what
+// the user wants (the dropdown's "🔍 联网搜索更多..." item). It resolves a
+// Chinese query to English titles via the name mapping, queries the site,
+// caches the results locally, and rebuilds the in-memory index so subsequent
+// detail lookups resolve.
+//
+// Because it's user-initiated (not on every keystroke), the multi-second
+// latency is acceptable.
+func (a *AppService) SearchRemoteExplicit(query string) ([]map[string]interface{}, error) {
+	q := strings.TrimSpace(query)
+	if q == "" {
+		return []map[string]interface{}{}, nil
 	}
 
 	games, err := a.scraperService.SearchRemote(q)

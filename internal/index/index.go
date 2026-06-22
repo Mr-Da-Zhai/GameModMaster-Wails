@@ -2,6 +2,7 @@ package index
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"GameModMaster/internal/model"
@@ -182,6 +183,100 @@ func (idx *Index) SearchGames(query string, limit int) []*model.Game {
 	}
 
 	return results
+}
+
+// Suggestion is a single autocomplete suggestion with a relevance score.
+// Higher score = better match. Score bands:
+//   100 = exact (case-insensitive) name match
+//    80 = prefix match on the english or localized name
+//    60 = prefix match on any alias
+//    40 = substring match on the english or localized name
+//    20 = substring match via the alias index
+type Suggestion struct {
+	Game  *model.Game
+	Score int
+}
+
+// SearchSuggestions is a relevance-ordered variant of SearchGames, optimised
+// for the autocomplete dropdown. It returns at most `limit` suggestions
+// ranked so prefix matches float to the top (typing "elden" surfaces
+// "Elden Ring" before "Lord of the Rings: War in the North" which merely
+// contains the substring).
+//
+// Pure in-memory; safe to call on every keystroke.
+func (idx *Index) SearchSuggestions(query string, limit int) []Suggestion {
+	q := strings.ToLower(strings.TrimSpace(query))
+	if q == "" || limit <= 0 {
+		return nil
+	}
+
+	scored := make(map[int32]int) // game ID -> best score
+
+	// 1. Direct matches against stored names.
+	for _, g := range idx.GamesByID {
+		loEN := strings.ToLower(g.NameEN)
+		loLocal := strings.ToLower(g.NameLocal)
+
+		var s int
+		switch {
+		case loEN == q || loLocal == q:
+			s = 100
+		case strings.HasPrefix(loEN, q) || strings.HasPrefix(loLocal, q):
+			s = 80
+		case strings.Contains(loEN, q) || strings.Contains(loLocal, q):
+			s = 40
+		}
+		if s > scored[g.ID] {
+			scored[g.ID] = s
+		}
+	}
+
+	// 2. Alias-driven matches (lets a Chinese query resolve to an English
+	//    title even when the game's stored name_local differs).
+	for aliasKey, zh := range idx.AliasIndex {
+		zhLow := strings.ToLower(zh)
+		var s int
+		switch {
+		case aliasKey == q || zhLow == q:
+			s = 100
+		case strings.HasPrefix(aliasKey, q) || strings.HasPrefix(zhLow, q):
+			s = 60
+		case strings.Contains(aliasKey, q) || strings.Contains(zhLow, q):
+			s = 20
+		}
+		if s == 0 {
+			continue
+		}
+		// aliasKey is a lowercase english name; resolve to the game.
+		if g, ok := idx.GamesByNameEN[aliasKey]; ok {
+			if s > scored[g.ID] {
+				scored[g.ID] = s
+			}
+		}
+	}
+
+	if len(scored) == 0 {
+		return nil
+	}
+
+	// Collect and sort by score desc, then by english name asc for stability.
+	out := make([]Suggestion, 0, len(scored))
+	for id, s := range scored {
+		if g, ok := idx.GamesByID[id]; ok {
+			out = append(out, Suggestion{Game: g, Score: s})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Score != out[j].Score {
+			return out[i].Score > out[j].Score
+		}
+		return out[i].Game.NameEN < out[j].Game.NameEN
+	})
+
+	if len(out) > limit {
+		out = out[:limit]
+	}
+	return out
 }
 
 // GetTrainersForGame returns all trainers for a game
