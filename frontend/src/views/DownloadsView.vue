@@ -6,19 +6,17 @@ import {
   NIcon,
   NSpin,
   NEmpty,
-  useMessage,
 } from 'naive-ui'
 import {
   PlayOutline,
   TrashOutline,
-  DownloadOutline,
-  CheckmarkCircle,
 } from '@vicons/ionicons5'
 import * as AppService from '../../bindings/GameModMaster/appservice'
+import { useFeedback } from '../composables/useConfirm'
 import type { DownloadedTrainer } from '../stores/trainer'
 
 const router = useRouter()
-const message = useMessage()
+const { confirm, toast } = useFeedback()
 const trainers = ref<DownloadedTrainer[]>([])
 const loading = ref(false)
 
@@ -30,31 +28,39 @@ async function loadDownloaded() {
     const result = await AppService.GetDownloadedTrainers()
     const arr = result as unknown
     trainers.value = Array.isArray(arr) ? (arr as DownloadedTrainer[]) : []
-  } catch (e) {
+  } catch (e: any) {
     console.error('[loadDownloaded]', e)
-    message.error('加载列表失败')
+    toast.error(`加载列表失败：${e?.message || e}`)
   } finally {
     loading.value = false
   }
 }
 
-async function handleLaunch(id: number) {
+async function handleLaunch(id: number, name?: string) {
   try {
     await AppService.LaunchTrainer(id)
-  } catch (e) {
+    toast.success(`已启动：${name || ''}`)
+  } catch (e: any) {
     console.error('[launch]', e)
-    message.error('启动失败')
+    toast.error(`启动失败：${e?.message || e}`)
   }
 }
 
-async function handleDelete(id: number) {
+async function handleDelete(t: DownloadedTrainer) {
+  const ok = await confirm({
+    title: '删除修改器',
+    content: `将删除「${t.game_name || t.game_name_en}」的本地文件与状态。此操作不可恢复，是否继续？`,
+    type: 'error',
+    positiveText: '删除',
+  })
+  if (!ok) return
   try {
-    await AppService.DeleteTrainer(id)
+    await AppService.DeleteTrainer(t.id)
     await loadDownloaded()
-    message.success('已删除')
-  } catch (e) {
+    toast.success('已删除')
+  } catch (e: any) {
     console.error('[delete]', e)
-    message.error('删除失败')
+    toast.error(`删除失败：${e?.message || e}`)
   }
 }
 
@@ -100,10 +106,10 @@ const isEmpty = computed(() => !loading.value && trainers.value.length === 0)
                 {{ t.status === 2 ? '已安装' : '已下载' }}
               </span>
               <div class="overlay">
-                <button v-if="t.status === 2" class="action-btn" @click.stop="handleLaunch(t.id)">
+                <button v-if="t.status === 2" class="action-btn" @click.stop="handleLaunch(t.id, t.game_name)">
                   <NIcon size="16"><PlayOutline /></NIcon><span>启动</span>
                 </button>
-                <button class="action-btn danger" @click.stop="handleDelete(t.id)">
+                <button class="action-btn danger" @click.stop="handleDelete(t)">
                   <NIcon size="16"><TrashOutline /></NIcon><span>删除</span>
                 </button>
               </div>

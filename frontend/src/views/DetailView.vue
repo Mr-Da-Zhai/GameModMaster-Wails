@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, h } from 'vue'
+import { onMounted, onBeforeUnmount, ref, h } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   NButton,
@@ -9,44 +9,107 @@ import {
   NSpin,
   NEmpty,
   NDataTable,
+  NResult,
 } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
-import { useMessage } from 'naive-ui'
-import { ArrowBackOutline, DownloadOutline, PlayOutline, GameControllerOutline } from '@vicons/ionicons5'
+import { Events } from '@wailsio/runtime'
+import { ArrowBackOutline, DownloadOutline, PlayOutline, GameControllerOutline, RefreshOutline } from '@vicons/ionicons5'
 import * as AppService from '../../bindings/GameModMaster/appservice'
 import { useTrainerStore } from '../stores/trainer'
+import { useFeedback } from '../composables/useConfirm'
 import type { TrainerDetailResponse, TrainerDetail, GameDetail } from '../stores/trainer'
 
 const route = useRoute()
 const router = useRouter()
 const store = useTrainerStore()
-const message = useMessage()
+const { confirm, toast } = useFeedback()
 
+// loading: initial detail call in flight.
+// fetching: background prefetch in flight (after the sentinel "not ready").
+// fetchError: last error from a background prefetch, surfaced to the user.
 const loading = ref(false)
+const fetching = ref(false)
+const fetchError = ref('')
 const game = ref<GameDetail | null>(null)
 const trainers = ref<TrainerDetail[]>([])
 
+// One-shot detail:progress listener. The backend fires it with
+// {game_id, done, error} when a background prefetch finishes.
+function onDetailProgress(ev: any) {
+  const raw = ev?.data
+  const data = Array.isArray(raw) ? raw[0] : raw
+  if (!data || Number(data.game_id) !== Number(route.params.id)) return
+  if (!data.done) return
+  fetching.value = false
+  if (data.error) {
+    fetchError.value = String(data.error)
+    toast.error(`详情加载失败：${data.error}`)
+  } else {
+    fetchError.value = ''
+    // Re-render now that trainer rows are cached.
+    loadDetail(true)
+  }
+}
+
 onMounted(() => {
   store.bindEvents()
+  Events.On('detail:progress', onDetailProgress as any)
   loadDetail()
 })
 
-async function loadDetail() {
+onBeforeUnmount(() => {
+  Events.Off('detail:progress', onDetailProgress as any)
+})
+
+// loadDetail tries GetTrainerDetail. If trainer rows aren't cached yet, the
+// backend returns the sentinel "detail not cached: prefetch in progress" —
+// we then show the spinner and wait for the detail:progress done event.
+// Pass silent=true to suppress the "no data" empty state during a re-render.
+async function loadDetail(silent = false) {
   const gameId = Number(route.params.id)
   if (!gameId) return
 
   loading.value = true
+  fetchError.value = ''
   try {
-    const result = await AppService.GetTrainerDetail(gameId) as unknown as TrainerDetailResponse
+    const result = (await AppService.GetTrainerDetail(gameId)) as unknown as
+      | TrainerDetailResponse
+      | null
     if (result) {
       game.value = result.game as GameDetail
       trainers.value = (result.trainers || []) as TrainerDetail[]
+      fetching.value = false
     }
-  } catch (e) {
-    console.error('Failed to load trainer detail:', e)
-    message.error('加载详情失败')
+  } catch (e: any) {
+    const msg = String(e?.message || e)
+    if (msg.includes('prefetch in progress') || msg.includes('detail not cached')) {
+      // Sentinel: data isn't cached. Backend has kicked off a prefetch;
+      // we'll auto-rerender when detail:progress fires.
+      if (!silent) {
+        fetching.value = true
+        // Also ensure the prefetch is running (no-op if it already is).
+        AppService.PrefetchTrainerDetail(gameId).catch(() => {})
+      }
+    } else {
+      console.error('Failed to load trainer detail:', e)
+      fetchError.value = msg
+      if (!silent) toast.error(`加载详情失败：${msg}`)
+    }
   } finally {
     loading.value = false
+  }
+}
+
+// Manual retry button shown when a prefetch failed.
+async function retryLoad() {
+  fetching.value = true
+  fetchError.value = ''
+  const gameId = Number(route.params.id)
+  try {
+    await AppService.PrefetchTrainerDetail(gameId)
+  } catch (e: any) {
+    fetching.value = false
+    toast.error(`重试失败：${e?.message || e}`)
   }
 }
 
@@ -75,31 +138,62 @@ function formatFileSize(size: number): string {
 }
 
 async function handleDownload(trainerId: number) {
+  const ok = await confirm({
+    title: '下载修改器',
+    content: '将下载到您设置的下载目录中，下载完成后会自动解压。是否继续？',
+    type: 'info',
+    positiveText: '下载',
+  })
+  if (!ok) return
   try {
     await AppService.DownloadTrainer(trainerId)
-    await loadDetail()
-  } catch (e) {
-    console.error('Failed to download trainer:', e)
-    message.error('下载失败')
+    toast.success('下载完成')
+    await loadDetail(true)
+  } catch (e: any) {
+    const msg = String(e?.message || e)
+    if (msg.includes('cancelled')) {
+      toast.info('已取消下载')
+    } else {
+      console.error('Failed to download trainer:', e)
+      toast.error(`下载失败：${msg}`)
+    }
   }
 }
 
 async function handleInstall(trainerId: number) {
+  const ok = await confirm({
+    title: '标记为已安装',
+    content: '确认将此修改器标记为「已安装」？您之后可一键启动。',
+    type: 'info',
+    positiveText: '确认',
+  })
+  if (!ok) return
   try {
     await AppService.InstallTrainer(trainerId)
-    await loadDetail()
-  } catch (e) {
+    toast.success('已标记为已安装')
+    await loadDetail(true)
+  } catch (e: any) {
     console.error('Failed to install trainer:', e)
-    message.error('安装失败')
+    toast.error(`安装失败：${e?.message || e}`)
   }
 }
 
 async function handleLaunch(trainerId: number) {
   try {
     await AppService.LaunchTrainer(trainerId)
-  } catch (e) {
+    toast.success('已启动')
+  } catch (e: any) {
     console.error('Failed to launch trainer:', e)
-    message.error('启动失败')
+    toast.error(`启动失败：${e?.message || e}`)
+  }
+}
+
+async function handleCancelDownload(trainerId: number) {
+  try {
+    await AppService.CancelDownload(trainerId)
+    toast.info('已请求取消下载')
+  } catch (e: any) {
+    console.error('Failed to cancel download:', e)
   }
 }
 
@@ -162,7 +256,7 @@ const columns: DataTableColumns<TrainerDetail> = [
   {
     title: '操作',
     key: 'actions',
-    width: 110,
+    width: 130,
     align: 'center',
     fixed: 'right',
     render(row) {
@@ -179,7 +273,18 @@ const columns: DataTableColumns<TrainerDetail> = [
       }
       if (downloading && prog && prog.total && prog.downloaded != null) {
         const pct = Math.min(100, Math.round((prog.downloaded / prog.total) * 100))
-        return h('span', { style: { fontSize: '12px', color: 'var(--accent)', fontWeight: '600' } }, `${pct}%`)
+        return h(
+          'div',
+          { style: { display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'center' } },
+          [
+            h('span', { style: { fontSize: '12px', color: 'var(--accent)', fontWeight: '600' } }, `${pct}%`),
+            h(
+              NButton,
+              { size: 'tiny', quaternary: true, type: 'error', onClick: () => handleCancelDownload(row.id) },
+              { default: () => '取消' },
+            ),
+          ],
+        )
       }
       return h(NButton, {
         ...btnProps,
@@ -207,8 +312,35 @@ const rowKey = (row: TrainerDetail) => row.id
       返回
     </NButton>
 
-    <NSpin :show="loading">
-      <NEmpty v-if="!loading && !game" description="未找到游戏信息" />
+    <NSpin :show="loading || fetching">
+      <NEmpty v-if="!loading && !fetching && !game" description="未找到游戏信息" />
+
+      <!-- Background prefetch failed: offer manual retry. -->
+      <div
+        v-else-if="!loading && !fetching && fetchError"
+        class="retry-card"
+      >
+        <NResult
+          status="error"
+          title="详情加载失败"
+          :description="fetchError"
+        >
+          <template #footer>
+            <NButton type="primary" @click="retryLoad">
+              <template #icon>
+                <NIcon><RefreshOutline /></NIcon>
+              </template>
+              重试
+            </NButton>
+          </template>
+        </NResult>
+      </div>
+
+      <!-- Background prefetch in flight: explain why the table is empty. -->
+      <div v-else-if="fetching && game && trainers.length === 0" class="fetching-card">
+        <NSpin size="small" />
+        <span>正在从原站获取修改器版本…</span>
+      </div>
 
       <template v-if="game">
         <!-- Game info -->
@@ -278,6 +410,23 @@ export default { name: 'DetailView' }
 }
 .back-btn {
   align-self: flex-start;
+}
+
+.retry-card,
+.fetching-card {
+  padding: 36px 24px;
+  background: var(--surface-1);
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+}
+.fetching-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--text-3);
+  font-size: 14px;
+  padding: 24px;
 }
 
 .game-info-card {

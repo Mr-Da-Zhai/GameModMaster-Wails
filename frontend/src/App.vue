@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { darkTheme, type GlobalThemeOverrides } from 'naive-ui'
-import { NConfigProvider, NMessageProvider, NDialogProvider } from 'naive-ui'
+import { NConfigProvider, NMessageProvider, NDialogProvider, NNotificationProvider } from 'naive-ui'
 import MainLayout from './components/MainLayout.vue'
 
 // Modern dark theme: deep midnight surfaces with a teal-emerald accent.
@@ -81,11 +81,15 @@ const themeOverrides: GlobalThemeOverrides = {
 
 <template>
   <NConfigProvider :theme="darkTheme" :theme-overrides="themeOverrides">
-    <NMessageProvider>
-      <NDialogProvider>
-        <MainLayout />
-      </NDialogProvider>
-    </NMessageProvider>
+    <NLoadingProvider>
+      <NMessageProvider>
+        <NDialogProvider>
+          <NNotificationProvider>
+            <MainLayout />
+          </NNotificationProvider>
+        </NDialogProvider>
+      </NMessageProvider>
+    </NLoadingProvider>
   </NConfigProvider>
 </template>
 

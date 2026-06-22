@@ -8,6 +8,7 @@ import {
   NPagination,
   NSpin,
   NEmpty,
+  NProgress,
 } from 'naive-ui'
 import {
   RefreshOutline,
@@ -16,11 +17,14 @@ import {
   DownloadOutline,
   PlayOutline,
   CheckmarkCircle,
+  CloseCircleOutline,
 } from '@vicons/ionicons5'
 import { useTrainerStore, type GameEntry } from '../stores/trainer'
+import { useFeedback } from '../composables/useConfirm'
 
 const router = useRouter()
 const store = useTrainerStore()
+const { toast } = useFeedback()
 
 const searchValue = ref('')
 let searchTimer: ReturnType<typeof setTimeout> | null = null
@@ -59,6 +63,15 @@ function handleRefresh() {
   store.refreshData()
 }
 
+async function handleCancelRefresh() {
+  try {
+    await store.cancelRefresh()
+    toast.info('已请求取消刷新（进度已保存）')
+  } catch (e: any) {
+    toast.error(e?.message || String(e))
+  }
+}
+
 async function handleLoadData() {
   await store.refreshDataSync()
 }
@@ -91,7 +104,15 @@ function formatDate(ts: number) {
 const refreshStatus = computed(() => {
   const p = store.refreshProgress
   if (!p || !p.current) return ''
-  return `抓取中 ${p.current}/${p.total || 3} · ${p.games || 0} 游戏`
+  const pct = p.total ? Math.round((p.current / p.total) * 100) : 0
+  const errs = p.detail_errors ? ` · ${p.detail_errors} 失败` : ''
+  return `抓取中 ${p.current}/${p.total || 3} (${pct}%) · ${p.games || 0} 游戏${errs}`
+})
+
+const refreshPercent = computed(() => {
+  const p = store.refreshProgress
+  if (!p || !p.total || !p.current) return 0
+  return Math.min(100, Math.round((p.current / p.total) * 100))
 })
 
 const isEmpty = computed(
@@ -141,6 +162,16 @@ function actionLabel(status: number) {
       </div>
       <div class="head-right">
         <NButton
+          v-if="store.refreshing"
+          quaternary
+          circle
+          type="error"
+          @click="handleCancelRefresh"
+          title="取消刷新（进度已保存）"
+        >
+          <template #icon><NIcon><CloseCircleOutline /></NIcon></template>
+        </NButton>
+        <NButton
           :loading="store.refreshing"
           quaternary
           circle
@@ -151,6 +182,19 @@ function actionLabel(status: number) {
         </NButton>
       </div>
     </header>
+
+    <!-- Slim progress bar while crawling -->
+    <div v-if="store.refreshing && store.refreshProgress?.total" class="progress-row">
+      <NProgress
+        type="line"
+        :percentage="refreshPercent"
+        :height="4"
+        :show-indicator="false"
+        :border-radius="2"
+        color="var(--accent)"
+        rail-color="var(--surface-2)"
+      />
+    </div>
 
     <!-- Error banner (never silently swallow failures) -->
     <div v-if="store.lastError" class="error-bar">
@@ -327,6 +371,11 @@ export default { name: 'HomeView' }
   padding: 10px 14px;
   border-radius: 10px;
   font-size: 13px;
+}
+
+.progress-row {
+  flex-shrink: 0;
+  padding: 0 2px;
 }
 
 /* Scrollable grid container — the real fix for layout collapse */

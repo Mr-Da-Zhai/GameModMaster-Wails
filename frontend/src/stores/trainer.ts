@@ -91,7 +91,9 @@ export interface RefreshProgress {
   games?: number
   trainers?: number
   done?: boolean
+  cancelled?: boolean
   summary?: string
+  detail_errors?: number
 }
 
 export interface DownloadProgress {
@@ -249,6 +251,16 @@ export const useTrainerStore = defineStore('trainer', () => {
     await loadTrainers(currentPage.value)
   }
 
+  async function cancelRefresh() {
+    try {
+      await AppService.CancelRefresh()
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('[cancelRefresh]', e)
+      throw e
+    }
+  }
+
   async function downloadTrainer(trainerId: number) {
     bindEvents()
     lastError.value = ''
@@ -314,6 +326,7 @@ export const useTrainerStore = defineStore('trainer', () => {
     refreshData,
     refreshDataSync,
     onRefreshComplete,
+    cancelRefresh,
     downloadTrainer,
     installTrainer,
     launchTrainer,
