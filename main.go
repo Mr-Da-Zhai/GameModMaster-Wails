@@ -2,6 +2,7 @@ package main
 
 import (
 	"embed"
+	"fmt"
 	"log"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -30,8 +31,11 @@ func main() {
 		},
 	})
 
+	// Title shows the build version so users can verify at a glance whether
+	// they're running the freshly built binary or a stale shortcut target.
+	// buildVersion is generated at build time (see build_version.go).
 	mainWindow := app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title:     "GameModMaster - 游戏修改器大师",
+		Title:     fmt.Sprintf("GameModMaster - 游戏修改器大师  [%s]", buildVersion),
 		Width:     1200,
 		Height:    800,
 		MinWidth:  900,
