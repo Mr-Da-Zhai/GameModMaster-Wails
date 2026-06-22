@@ -158,7 +158,14 @@ func ParseTrainerDetail(html string) (*TrainerPage, error) {
 		})
 		trainer.DownloadURL = href
 		trainer.FileName = fileName
-		trainer.Version = page.Options // best available version string
+		// Prefer a real version string parsed from the filename (e.g.
+		// "v1.12"); only fall back to the page-level "N Options" string
+		// if the filename yielded nothing useful.
+		if v := parseVersionFromFileName(fileName); v != "" {
+			trainer.Version = v
+		} else {
+			trainer.Version = page.Options
+		}
 
 		// Map cells by position. The row layout is:
 		//   [0] icon, [1] filename/link, [2] date, [3] size, [4] downloads
@@ -415,4 +422,69 @@ func simpleHash(s string) string {
 		h *= prime64
 	}
 	return fmt.Sprintf("%016x", h)
+}
+
+// versionInFileNameRe matches a version token inside a FLiNG trainer filename.
+// FLiNG filenames look like:
+//   "Crimson.Desert.v1.0-v1.12.Plus.12.Trainer-FLiNG"
+//   "Elden.Ring.v1.16.Plus.28.Trainer-FLiNG"
+//   "Foo.v2025.06.15.Plus.10.Trainer-FLiNG"
+//   "Foo.Update.2025.06.15.Plus.10.Trainer-FLiNG"
+// We capture the "v..." segment (with an optional "-v..." range tail),
+// stopping at ".Plus", ".Trainer", "-FLiNG", or end.
+var versionInFileNameRe = regexp.MustCompile(`(?i)\b(v?\d+(?:\.\d+)*(?:[-_ ]*v?\d+(?:\.\d+)*)*)`)
+
+// ParseVersionFromFileName extracts a human-readable trainer version string
+// from a FLiNG filename. Examples:
+//
+//	"Crimson.Desert.v1.0-v1.12.Plus.12.Trainer-FLiNG" -> "v1.0-v1.12"
+//	"Elden.Ring.v1.16.Plus.28.Trainer-FLiNG"          -> "v1.16"
+//	"Foo.Bar.v1.2.3.Plus.10.Trainer-FLiNG"            -> "v1.2.3"
+//	"Foo.Bar.Plus.10.Trainer-FLiNG" (no version)      -> ""
+//
+// For a version range "v1.0-v1.12" we keep the full range so the user can see
+// which game versions the trainer covers. The trailing upper bound is what
+// matters for "is this the latest" comparisons.
+//
+// Used to replace the meaningless "12 Options" string that used to populate
+// Trainer.Version — the options count is already shown separately.
+//
+// Exported so app.go can reparse historical trainer rows on the fly without
+// re-crawling.
+func ParseVersionFromFileName(fileName string) string {
+	return parseVersionFromFileName(fileName)
+}
+
+// parseVersionFromFileName is the internal implementation; see the exported
+// wrapper above for the contract.
+func parseVersionFromFileName(fileName string) string {
+	if fileName == "" {
+		return ""
+	}
+	// Strip a trailing "-FLiNG" / "-Fling" suffix so it doesn't interfere.
+	base := strings.TrimSpace(fileName)
+	base = strings.TrimSuffix(base, "-FLiNG")
+	base = strings.TrimSuffix(base, "-Fling")
+
+	// Look for the version token. We anchor on either a leading "v" with
+	// digits, or a bare "N.N" shape, but skip leading tokens that are just
+	// numbers (years like "2025" are ambiguous — require a dot or v prefix).
+	for _, m := range versionInFileNameRe.FindAllString(base, -1) {
+		token := strings.TrimSpace(m)
+		if token == "" {
+			continue
+		}
+		// Reject bare integers (likely years / option counts) — we want
+		// something shaped like a version: contains a dot, or a "v" prefix.
+		if !strings.Contains(token, ".") && !strings.HasPrefix(strings.ToLower(token), "v") {
+			continue
+		}
+		// Reject the ".Plus.NN." options count token and similar.
+		low := strings.ToLower(token)
+		if strings.Contains(low, "plus") || strings.Contains(low, "trainer") {
+			continue
+		}
+		return token
+	}
+	return ""
 }

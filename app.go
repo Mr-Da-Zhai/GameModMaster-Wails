@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -549,6 +550,16 @@ func (a *AppService) prefetchDetail(gameID int32) {
 	})
 }
 
+// isLegacyOptionsVersion reports whether a trainer.Version value is the old
+// meaningless "N Options" shape (e.g. "12 Options", "Trainer Options") that
+// pre-filename-parser scrapes produced. We use this to trigger on-the-fly
+// reparsing from the filename so historical data shows real versions.
+var legacyOptionsVersionRe = regexp.MustCompile(`(?i)^\s*\d+\s*(?:trainer\s+)?options?\s*$`)
+
+func isLegacyOptionsVersion(v string) bool {
+	return v != "" && legacyOptionsVersionRe.MatchString(v)
+}
+
 // buildTrainerDetailResult assembles the JSON-friendly detail payload for a
 // game assuming trainer rows are already cached in the index.
 func (a *AppService) buildTrainerDetailResult(gameID int32) map[string]interface{} {
@@ -558,10 +569,21 @@ func (a *AppService) buildTrainerDetailResult(gameID int32) map[string]interface
 	trainerList := make([]map[string]interface{}, 0, len(trainers))
 
 	for _, t := range trainers {
+		// Runtime version fix-up for historical rows: trainers scraped before
+		// the filename-version parser landed have Version = "N Options"
+		// (meaningless). If we detect that shape, reparse from the filename
+		// on the fly so the UI shows a real version without a re-crawl.
+		version := t.Version
+		if isLegacyOptionsVersion(version) {
+			if v := scraper.ParseVersionFromFileName(t.FileName); v != "" {
+				version = v
+			}
+		}
+
 		tMap := map[string]interface{}{
 			"id":             t.ID,
 			"game_id":        t.GameID,
-			"version":        t.Version,
+			"version":        version,
 			"game_version":   t.GameVersion,
 			"download_url":   t.DownloadURL,
 			"file_size":      t.FileSize,
@@ -666,7 +688,19 @@ func (a *AppService) GetRefreshResult() string {
 // DownloadTrainer downloads a trainer file.
 // Runs synchronously; progress is emitted via the "download:progress" event.
 // Use CancelDownload(trainerID) to abort an in-flight download.
+//
+// Pipeline: download → extract zip → mark as installed. For FLiNG trainers
+// there is no separate "install" step (the extracted .exe IS the trainer), so
+// on success the trainer is immediately launchable.
+//
+// Re-entry: a second call for a trainer that's already downloading returns an
+// error immediately so the UI can disable the button.
 func (a *AppService) DownloadTrainer(trainerID int32) error {
+	// Prevent double-clicks / concurrent downloads of the same trainer.
+	if a.isDownloading(trainerID) {
+		return fmt.Errorf("trainer %d is already downloading", trainerID)
+	}
+
 	t, ok := a.idx.TrainersByID[trainerID]
 	if !ok {
 		return fmt.Errorf("trainer not found: %d", trainerID)
@@ -729,9 +763,14 @@ func (a *AppService) DownloadTrainer(trainerID int32) error {
 		os.Remove(filepath.Join(downloadDir, fileName))
 	}
 
-	// Mark as downloaded
-	if err := a.downloadService.MarkDownloaded(trainerID, localPath); err != nil {
-		return fmt.Errorf("mark downloaded failed: %w", err)
+	// Mark as INSTALLED (i.e. ready to launch) — for FLiNG trainers there
+	// is no separate install step; the extracted .exe is the trainer, so
+	// completing the download-extract pipeline means the user can launch
+	// immediately. We go straight to StatusInstalled, skipping the
+	// StatusDownloaded intermediate state that previously required a
+	// manual "Install" click.
+	if err := a.downloadService.MarkInstalled(trainerID, localPath); err != nil {
+		return fmt.Errorf("mark installed failed: %w", err)
 	}
 
 	// Signal completion
@@ -768,6 +807,23 @@ func (a *AppService) unregisterDownloadCancel(trainerID int32) {
 	a.downloadCancelMu.Lock()
 	defer a.downloadCancelMu.Unlock()
 	delete(a.downloadCancel, trainerID)
+}
+
+// isDownloading reports whether a download is currently in flight for the
+// given trainer. Used by DownloadTrainer to reject re-entry and by the
+// frontend (via IsDownloading) to disable the download button.
+func (a *AppService) isDownloading(trainerID int32) bool {
+	a.downloadCancelMu.Lock()
+	defer a.downloadCancelMu.Unlock()
+	_, ok := a.downloadCancel[trainerID]
+	return ok
+}
+
+// IsDownloading is the frontend-visible wrapper around isDownloading.
+// Lets the UI reflect in-flight downloads even before the first progress
+// event arrives (so it can disable the button immediately on click).
+func (a *AppService) IsDownloading(trainerID int32) bool {
+	return a.isDownloading(trainerID)
 }
 
 // pickLaunchable chooses the best file to treat as the trainer executable from

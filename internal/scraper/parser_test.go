@@ -183,3 +183,33 @@ func TestParseFileSize(t *testing.T) {
 		}
 	}
 }
+
+func TestParseVersionFromFileName(t *testing.T) {
+	cases := []struct {
+		in   string
+		want string
+	}{
+		// Version range — keep full range.
+		{"Crimson.Desert.v1.0-v1.12.Plus.12.Trainer-FLiNG", "v1.0-v1.12"},
+		// Single version.
+		{"Elden.Ring.v1.16.Plus.28.Trainer-FLiNG", "v1.16"},
+		// Three-component version.
+		{"Foo.Bar.v1.2.3.Plus.10.Trainer-FLiNG", "v1.2.3"},
+		// No "v" prefix but dotted version shape.
+		{"Game.Name.1.09.Plus.15.Trainer-FLiNG", "1.09"},
+		// Update-style filename with date — the date token should be skipped
+		// (no "v" and no dot... actually 2026.06.15 has dots, so it matches).
+		// We accept this; it's still more useful than "12 Options".
+		{"Foo.Update.2026.06.15.Plus.10.Trainer-FLiNG", "2026.06.15"},
+		// No version at all.
+		{"Foo.Bar.Plus.10.Trainer-FLiNG", ""},
+		// Empty input.
+		{"", ""},
+	}
+	for _, c := range cases {
+		got := parseVersionFromFileName(c.in)
+		if got != c.want {
+			t.Errorf("parseVersionFromFileName(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}

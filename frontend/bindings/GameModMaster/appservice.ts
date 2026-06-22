@@ -48,6 +48,13 @@ export function DeleteTrainer(trainerID: number): $CancellablePromise<void> {
  * DownloadTrainer downloads a trainer file.
  * Runs synchronously; progress is emitted via the "download:progress" event.
  * Use CancelDownload(trainerID) to abort an in-flight download.
+ * 
+ * Pipeline: download → extract zip → mark as installed. For FLiNG trainers
+ * there is no separate "install" step (the extracted .exe IS the trainer), so
+ * on success the trainer is immediately launchable.
+ * 
+ * Re-entry: a second call for a trainer that's already downloading returns an
+ * error immediately so the UI can disable the button.
  */
 export function DownloadTrainer(trainerID: number): $CancellablePromise<void> {
     return $Call.ByID(1680021711, trainerID);
@@ -154,6 +161,15 @@ export function GetTrainers(page: number, pageSize: number): $CancellablePromise
  */
 export function InstallTrainer(trainerID: number): $CancellablePromise<void> {
     return $Call.ByID(2170736966, trainerID);
+}
+
+/**
+ * IsDownloading is the frontend-visible wrapper around isDownloading.
+ * Lets the UI reflect in-flight downloads even before the first progress
+ * event arrives (so it can disable the button immediately on click).
+ */
+export function IsDownloading(trainerID: number): $CancellablePromise<boolean> {
+    return $Call.ByID(1855511626, trainerID);
 }
 
 /**
