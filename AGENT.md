@@ -1,0 +1,232 @@
+# AGENT.md — 开发与发布操作手册
+
+> 这是给 AI agent(以及人类协作者)的**操作手册**:如何在这个仓库里干活、提交、推送、合并、打包、部署。
+> 项目设计文档见 `CLAUDE.md`(架构、约定、数据模型),本文件只讲**流程**。
+>
+> **新会话第一条规则:先读本文件**,不要让用户重复讲流程。
+
+---
+
+## 0. 项目身份(一句话)
+
+GameModMaster-Wails = Wails v3 + Go + Vue 3 的桌面应用,从 flingtrainer.com 爬取游戏修改器,本地 SQLite 持久化,提供中英文搜索 / 多版本管理 / 下载安装启动。
+
+---
+
+## 1. 环境前置(一次性安装)
+
+| 工具 | 版本要求 | 验证命令 |
+|---|---|---|
+| Go | ≥ 1.25 | `go version` |
+| Node.js | ≥ 20 | `node --version` |
+| pnpm | 最新 | `pnpm --version` |
+| Wails v3 CLI | `wails3` 在 PATH | `wails3 version` |
+| Git | 任意 | `git --version` |
+
+**不需要 GCC/CGO** —— SQLite 驱动已切换为 `modernc.org/sqlite`(纯 Go),`wails3 build` 在 `CGO_ENABLED=0` 下可直接产出生产二进制。
+
+前端依赖首次安装:
+```bash
+cd frontend && pnpm install
+```
+
+---
+
+## 2. 日常工作流(worktree 隔离)
+
+**所有非琐碎改动都用 git worktree 隔离**,不要直接在 main 上写代码。
+
+### 2.1 开新 worktree
+```bash
+# 在主仓库目录里(它本身是一个 worktree,checkout 在 main)
+cd D:/Dev/Project/desktop/GameModMaster-Wails
+
+# 创建一个新分支的 worktree(分支名按语义命名,如 fix/xxx、feat/xxx)
+git worktree add -b <branch-name> D:/Dev/Project/desktop/GameModMaster-Wails-wt main
+cd D:/Dev/Project/desktop/GameModMaster-Wails-wt
+```
+
+之后所有编辑、`go build`、`wails3 build` 都在 `-wt` 目录里做,**主目录永远停在 main 干净状态**。
+
+### 2.2 开发循环
+```bash
+# 后端改动 → 编译 + 单测
+go build ./...
+go test ./internal/...
+
+# 改了 app.go(暴露给前端的方法)→ 重新生成 bindings
+wails3 generate bindings
+
+# 前端改动 → 类型检查 + 构建
+cd frontend
+npx vue-tsc --noEmit       # 类型检查(必须 0 错误)
+npx vite build             # 前端构建(验证打包通过)
+```
+
+### 2.3 提交规范(最小原子提交)
+- 前缀:`feat:` 新功能 / `fix:` 修复 / `chore:` 构建/配置 / `docs:` 文档 / `refactor:` 重构
+- **一个 commit 一件事**:修 bug + 加功能 + 改配置要拆成多个 commit
+- commit message 第一行 ≤ 72 字符,空一行后写动机 + 验证结果
+- 提交者配置(本仓库没全局设过的话):
+  ```bash
+  git -c user.name=zhai -c user.email=zhai@local commit -m "..."
+  ```
+
+### 2.4 推送 feature 分支
+```bash
+git push -u origin <branch-name>
+```
+推送后 GitHub 会输出创建 PR 的链接 —— 是否开 PR 由用户决定,不要擅自开。
+
+### 2.5 清理 worktree(合并完成后)
+```bash
+cd D:/Dev/Project/desktop/GameModMaster-Wails      # 回主 worktree
+git worktree remove D:/Dev/Project/desktop/GameModMaster-Wails-wt
+git branch -d <branch-name>                         # 删本地分支(已合并才允许)
+git push origin --delete <branch-name>              # 删远程分支(可选)
+```
+
+---
+
+## 3. 合并到 main
+
+用户说"合并到 main"时,走 fast-forward(只在 main 没有分叉时可用,保持线性历史):
+
+```bash
+cd D:/Dev/Project/desktop/GameModMaster-Wails
+git fetch origin
+git status                    # 必须干净
+git merge --ff-only <branch-name>
+```
+
+如果 `--ff-only` 失败说明 main 有独立提交,需要 `git merge` 或 rebase —— 此时停下来问用户。
+
+---
+
+## 4. 打包生产二进制(发布)
+
+### 4.1 一键命令
+```bash
+cd D:/Dev/Project/desktop/GameModMaster-Wails
+PACKAGE_MANAGER=pnpm wails3 build
+```
+
+**`PACKAGE_MANAGER=pnpm` 必加** —— 默认会用 npm,本机 npm 缓存损坏会失败。
+
+这个命令会依次:
+1. `go mod tidy`
+2. 重新生成图标 / syso 资源 / Wails bindings(`.ts` 格式)
+3. `pnpm install`(前端依赖)
+4. `pnpm run build`(`vue-tsc` 类型检查 + `vite build` 生产构建)
+5. `go build -tags production -trimpath -ldflags="-w -s -H windowsgui"` → 产出 `bin/GameModMaster.exe`
+
+### 4.2 产物位置
+```
+bin/GameModMaster.exe          # 生产二进制(Windows GUI,64 位)
+```
+当前大小约 16 MB。
+
+### 4.3 部署到桌面(用户要看效果时)
+```bash
+cp bin/GameModMaster.exe "/c/Users/ZhaiRunHu/Desktop/GameModMaster.exe"
+```
+
+### 4.4 冒烟测试(每次发布必做)
+```bash
+# 后台启动,看启动日志是否有错
+(./bin/GameModMaster.exe > /tmp/gamm_run.log 2>&1 &) && sleep 6 && cat /tmp/gamm_run.log
+# 期望看到:
+#   [AppService] Data directory: C:\Users\...\AppData\Local\GameModMaster
+#   [AppService] Name mapping loaded (863 entries)
+#   [AppService] Index built: N games, M trainers, K states
+#   [WebView2] Environment created successfully
+
+# 关掉
+powershell "Get-Process GameModMaster -ErrorAction SilentlyContinue | Stop-Process -Force"
+```
+
+**如果日志里出现 `go-sqlite3 requires cgo to work. This is a stub` —— 构建出错了**,检查 `go.mod` 是否回退到了 mattn 驱动。
+
+### 4.5 数据目录(用户数据位置)
+应用数据**不在 exe 旁边**(避免用户删 exe 时一起删掉数据),而在:
+- Windows: `%LOCALAPPDATA%\GameModMaster\`(`gamm.db` + `downloads/`)
+
+首次启动如果 DB 为空,会自动后台全量爬取(约 6 分钟,49 页 / 731 游戏)。
+
+---
+
+## 5. 推送 main 到远程
+
+```bash
+cd D:/Dev/Project/desktop/GameModMaster-Wails
+git push origin main
+```
+
+---
+
+## 6. 验证数据完整性(可选但推荐)
+
+应用数据在 `%LOCALAPPDATA%\GameModMaster\gamm.db`,可以用 sqlite3 直接查:
+
+```bash
+DB="/c/Users/$USER/AppData/Local/GameModMaster/gamm.db"
+sqlite3 "$DB" "SELECT COUNT(*) FROM games;"        # 期望 ~731
+sqlite3 "$DB" "SELECT COUNT(*) FROM trainers;"     # 期望 ~2400+
+sqlite3 "$DB" "SELECT COUNT(*) FROM trainer_states;"  # 用户下载数
+sqlite3 "$DB" "SELECT key,value FROM kv_store;"    # 配置项
+```
+
+---
+
+## 7. 常见坑(踩过的)
+
+| 症状 | 根因 | 解决 |
+|---|---|---|
+| exe 启动后 `requires cgo to work` | SQLite 驱动是 mattn(需 CGO) | `go.mod` 必须是 `modernc.org/sqlite` |
+| `CountTotalPages` 返回 256 | 404 页 CSS 里也有 `post-standard` 字样 | 已修,看 `hasGameArticles` 函数,别回退 |
+| 全量爬取一半 detail 失败(429) | 并发太高被限速 | `defaultDetailConcurrency = 3`,别调高 |
+| `npm install` 失败 | npm 缓存损坏 | 永远用 `PACKAGE_MANAGER=pnpm wails3 build` |
+| `pattern all:frontend/dist: no matching files` | 没先构建前端就 `go build .` | 先 `pnpm run build`,或直接用 `wails3 build` |
+| bindings 改了 `app.go` 后前端不识别 | 没重新生成 bindings | `wails3 generate bindings` |
+
+---
+
+## 8. 完整发布流程(端到端,从改动到上线)
+
+```bash
+# 0. 前提:feature 分支在 worktree 里改完、自测通过、已推送
+
+# 1. 回主 worktree,合并
+cd D:/Dev/Project/desktop/GameModMaster-Wails
+git fetch origin
+git merge --ff-only <branch-name>
+
+# 2. 在 main 上打包(确保打包的是合并后的代码)
+PACKAGE_MANAGER=pnpm wails3 build
+
+# 3. 冒烟测试
+(./bin/GameModMaster.exe > /tmp/gamm_run.log 2>&1 &) && sleep 6 && cat /tmp/gamm_run.log
+powershell "Get-Process GameModMaster -ErrorAction SilentlyContinue | Stop-Process -Force"
+
+# 4. 部署到桌面
+cp bin/GameModMaster.exe "/c/Users/ZhaiRunHu/Desktop/GameModMaster.exe"
+
+# 5. 推送 main
+git push origin main
+
+# 6. 清理 worktree
+git worktree remove D:/Dev/Project/desktop/GameModMaster-Wails-wt
+git branch -d <branch-name>
+```
+
+---
+
+## 9. 给新会话 agent 的速记
+
+- **本文件是你的第一手资料**,先读这里再读 `CLAUDE.md`(架构)。
+- 用户说"打包到桌面" = 第 4 + 8 节的流程。
+- 用户说"合并到 main" = 第 3 节,永远用 `--ff-only`,失败就停下问。
+- 用户说"看看效果" = 跑 exe + 冒烟测试(第 4.4 节)。
+- **永远不要直接在 main 上写代码**,开 worktree(第 2 节)。
+- **永远不要用 npm**,用 pnpm(第 4.1 节)。
+- 改了 `app.go` 后**必须** `wails3 generate bindings`(第 7 节)。
