@@ -92,26 +92,37 @@ func (s *Scraper) FetchListPage(page int) ([]*model.Game, error) {
 
 // CountTotalPages probes flingtrainer.com to determine the last list page.
 // It does a binary search over page numbers: a page counts as "existing" only
-// if it yields any real <article class="post-standard"> game entries. Returns
-// the highest such page number (minimum 1).
+// if it yields any real game article entries. Returns the highest such page
+// number (minimum 1).
+//
+// IMPORTANT: the probe must NOT use a bare "post-standard" substring check —
+// the 404 / "Page not found" page still ships the site's stylesheet, which
+// contains CSS rules like ".post-standard:hover .post-title a" and
+// ".blog .post-standard". A naive strings.Contains(html, "post-standard")
+// therefore returns true even for non-existent pages, which previously made
+// the binary search believe there were 256 pages and triggered 200+ useless
+// 404 requests on every refresh. We instead require a real <article> element
+// carrying the post-standard class.
 func (s *Scraper) CountTotalPages() (int, error) {
-	// Fast probe: try a high upper bound first to anchor the search.
-	hasPage := func(p int) (bool, error) {
-		url := baseURL + "/"
+	// hasRealArticles returns true only if the page actually lists game
+	// articles (i.e. <article ... class="...post-standard..."> appears at
+	// least once).
+	hasRealArticles := func(p int) (bool, error) {
+		pageURL := baseURL + "/"
 		if p > 1 {
-			url = fmt.Sprintf("%s/page/%d/", baseURL, p)
+			pageURL = fmt.Sprintf("%s/page/%d/", baseURL, p)
 		}
-		html, err := s.FetchPage(url)
+		html, err := s.FetchPage(pageURL)
 		if err != nil {
 			return false, err
 		}
-		return strings.Contains(html, "post-standard"), nil
+		return hasGameArticles(html), nil
 	}
 
-	// Find an upper bound that no longer exists.
+	// Find an upper bound that no longer has real articles.
 	lo, hi := 1, 8
 	for {
-		ok, err := hasPage(hi)
+		ok, err := hasRealArticles(hi)
 		if err != nil {
 			return lo, nil // be tolerant: return what we know
 		}
@@ -120,7 +131,9 @@ func (s *Scraper) CountTotalPages() (int, error) {
 		}
 		lo = hi
 		hi *= 2
-		if hi > 256 {
+		// Guard: the site is currently ~50 pages; cap probing well above that
+		// but still bounded so we never loop forever.
+		if hi > 1024 {
 			break
 		}
 	}
@@ -128,7 +141,7 @@ func (s *Scraper) CountTotalPages() (int, error) {
 	// Binary search the last existing page in (lo, hi].
 	for lo+1 < hi {
 		mid := (lo + hi) / 2
-		ok, err := hasPage(mid)
+		ok, err := hasRealArticles(mid)
 		if err != nil {
 			break
 		}
@@ -139,6 +152,38 @@ func (s *Scraper) CountTotalPages() (int, error) {
 		}
 	}
 	return lo, nil
+}
+
+// hasGameArticles reports whether the given HTML contains at least one real
+// game article element (<article ... class="...post-standard...">). The
+// leading '<' is what distinguishes a real article from the bare CSS class
+// references present on the 404 page.
+func hasGameArticles(html string) bool {
+	// Cheap negative check first: 404 pages always contain "Page not found".
+	if strings.Contains(html, "Page not found") {
+		return false
+	}
+	// Then require an <article tag carrying the post-standard class. We use
+	// a substring scan instead of goquery here because it is dramatically
+	// cheaper to run on every probe request.
+	idx := 0
+	needle := "<article"
+	for {
+		pos := strings.Index(html[idx:], needle)
+		if pos < 0 {
+			return false
+		}
+		idx += pos + len(needle)
+		// Grab the next 256 bytes (covers the class attribute) and look for
+		// "post-standard" inside it.
+		end := idx + 256
+		if end > len(html) {
+			end = len(html)
+		}
+		if strings.Contains(html[idx:end], "post-standard") {
+			return true
+		}
+	}
 }
 
 // FetchDetailPage fetches and parses a detail page for a specific game.

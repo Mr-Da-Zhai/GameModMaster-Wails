@@ -135,6 +135,36 @@ func TestParseTrainerDetail(t *testing.T) {
 	}
 }
 
+// notFoundHTML mirrors the real 404 page: it has the site stylesheet
+// (which references ".post-standard") but NO real game <article> elements.
+// A naive substring check would wrongly report articles here.
+const notFoundHTML = `<html><head>
+<title>Page not found - FLiNG Trainer</title>
+<style>
+.post-standard:hover .post-title a,
+.blog .post-standard, .single .post-standard, .archive .post-standard, .search .post-standard {
+  background:#fff;
+}
+</style></head><body>
+<div class="content">Sorry, the page you requested does not exist.</div>
+</body></html>`
+
+func TestHasGameArticles(t *testing.T) {
+	// Real list page HTML must report true.
+	if !hasGameArticles(listSampleHTML) {
+		t.Errorf("hasGameArticles(listSampleHTML) = false, want true")
+	}
+	// 404 / not-found page must report false even though it ships
+	// ".post-standard" CSS rules.
+	if hasGameArticles(notFoundHTML) {
+		t.Errorf("hasGameArticles(notFoundHTML) = true, want false (CSS-only references must not count)")
+	}
+	// Trivially empty page.
+	if hasGameArticles("") {
+		t.Errorf("hasGameArticles(\"\") = true, want false")
+	}
+}
+
 func TestParseFileSize(t *testing.T) {
 	cases := []struct {
 		in   string
