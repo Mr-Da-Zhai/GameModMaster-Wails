@@ -162,6 +162,91 @@ func (s *MappingService) Count() int {
 	return len(s.entries)
 }
 
+// MappingEntry is a JSON-friendly view of one name-mapping row, used by the
+// management UI.
+type MappingEntry struct {
+	NameEN  string   `json:"name_en"`
+	NameZH  string   `json:"name_zh"`
+	Aliases []string `json:"aliases"`
+}
+
+// ListEntries returns the raw mapping entries. If query is non-empty, only
+// entries whose english name, chinese name, or any alias contains the query
+// (case-insensitive) are returned. Use offset/limit for pagination.
+func (s *MappingService) ListEntries(query string, offset, limit int) []MappingEntry {
+	q := strings.ToLower(strings.TrimSpace(query))
+
+	// First pass: count matches so we can size the slice.
+	total := 0
+	for _, e := range s.entries {
+		if matchesQuery(e, q) {
+			total++
+		}
+	}
+	if total == 0 {
+		return []MappingEntry{}
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	if offset >= total {
+		return []MappingEntry{}
+	}
+	if limit <= 0 {
+		limit = total - offset
+	}
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+
+	out := make([]MappingEntry, 0, end-offset)
+	skipped := 0
+	taken := 0
+	for _, e := range s.entries {
+		if !matchesQuery(e, q) {
+			continue
+		}
+		if skipped < offset {
+			skipped++
+			continue
+		}
+		if taken >= limit {
+			break
+		}
+		// Defensive copy of the alias slice so callers can't mutate state.
+		var aliases []string
+		if len(e.Aliases) > 0 {
+			aliases = append(aliases, e.Aliases...)
+		}
+		out = append(out, MappingEntry{
+			NameEN:  e.NameEN,
+			NameZH:  e.NameZH,
+			Aliases: aliases,
+		})
+		taken++
+	}
+	return out
+}
+
+// matchesQuery reports whether an entry matches a (lowercase) query against
+// its english name, chinese name, or aliases. An empty query matches all.
+func matchesQuery(e nameEntry, q string) bool {
+	if q == "" {
+		return true
+	}
+	if strings.Contains(strings.ToLower(e.NameEN), q) ||
+		strings.Contains(strings.ToLower(e.NameZH), q) {
+		return true
+	}
+	for _, a := range e.Aliases {
+		if strings.Contains(strings.ToLower(a), q) {
+			return true
+		}
+	}
+	return false
+}
+
 // normalizeKey produces a canonical lookup key from a raw name:
 //   - decode common HTML entities (&#8217; &#039; &#8211; &#038; …)
 //   - lowercase

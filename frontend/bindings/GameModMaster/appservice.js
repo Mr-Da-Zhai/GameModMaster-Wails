@@ -16,6 +16,10 @@ import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Cr
 // @ts-ignore: Unused imports
 import * as application$0 from "../github.com/wailsapp/wails/v3/pkg/application/models.js";
 
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as $models from "./models.js";
+
 /**
  * CancelDownload aborts an in-flight download for the given trainer id.
  * Returns an error if no download is currently running for that trainer.
@@ -91,6 +95,22 @@ export function GetInstalledTrainers() {
  */
 export function GetMappingCount() {
     return $Call.ByID(1087103351);
+}
+
+/**
+ * GetMappingEntries returns a paginated, optionally filtered, view of the
+ * name-mapping table. Used by the mapping-management UI in Settings.
+ * query is a case-insensitive substring match against name_en, name_zh,
+ * and aliases. offset/limit control pagination.
+ * @param {string} query
+ * @param {number} offset
+ * @param {number} limit
+ * @returns {$CancellablePromise<$models.MappingEntry[]>}
+ */
+export function GetMappingEntries(query, offset, limit) {
+    return $Call.ByID(3537339080, query, offset, limit).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType3($result);
+    }));
 }
 
 /**
@@ -271,3 +291,5 @@ export function Shutdown() {
 // Private type creation functions
 const $$createType0 = $Create.Map($Create.Any, $Create.Any);
 const $$createType1 = $Create.Array($$createType0);
+const $$createType2 = $models.MappingEntry.createFrom;
+const $$createType3 = $Create.Array($$createType2);

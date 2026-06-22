@@ -8,13 +8,14 @@ import {
   NInput,
   NSelect,
 } from 'naive-ui'
-import { FolderOpenOutline, RefreshOutline } from '@vicons/ionicons5'
+import { FolderOpenOutline, RefreshOutline, ListOutline } from '@vicons/ionicons5'
 import * as AppService from '../../bindings/GameModMaster/appservice'
 import { Events, Dialogs } from '@wailsio/runtime'
 import { useTrainerStore } from '../stores/trainer'
 import { useFeedback } from '../composables/useConfirm'
 import { useLocale, type AppLocale } from '../i18n'
 import { useI18n } from 'vue-i18n'
+import MappingBrowser from '../components/MappingBrowser.vue'
 
 const { t } = useI18n()
 const { toast } = useFeedback()
@@ -29,6 +30,7 @@ const downloadDirInput = ref('')
 const editingDownloadDir = ref(false)
 const mappingCount = ref(0)
 const totalGames = ref(0)
+const showMapping = ref(false)
 
 const localeOptions = computed(() => [
   { label: t('settings.languageZh'), value: 'zh-CN' as AppLocale },
@@ -215,9 +217,12 @@ async function saveDownloadDir() {
             <div class="stat-num">{{ totalGames }}</div>
             <div class="stat-label">{{ t('home.title') }}</div>
           </div>
-          <div class="stat">
+          <div class="stat stat-clickable" @click="showMapping = true">
             <div class="stat-num">{{ mappingCount }}</div>
-            <div class="stat-label">{{ t('settings.mappingCount') }}</div>
+            <div class="stat-label">
+              {{ t('settings.mappingCount') }}
+              <span class="stat-cta"><NIcon><ListOutline /></NIcon></span>
+            </div>
           </div>
         </div>
       </section>
@@ -245,6 +250,9 @@ async function saveDownloadDir() {
         </div>
       </section>
     </NSpin>
+
+    <!-- Mapping table browser modal -->
+    <MappingBrowser v-model:show="showMapping" />
   </div>
 </template>
 
@@ -344,6 +352,21 @@ export default { name: 'SettingsView' }
   background: var(--surface-2);
   border-radius: 12px;
   padding: 18px 20px;
+}
+.stat-clickable {
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  border: 1px solid transparent;
+}
+.stat-clickable:hover {
+  background: var(--surface-3);
+  border-color: var(--accent);
+}
+.stat-cta {
+  display: inline-flex;
+  vertical-align: middle;
+  margin-left: 6px;
+  color: var(--accent);
 }
 .stat-num {
   font-size: 28px;

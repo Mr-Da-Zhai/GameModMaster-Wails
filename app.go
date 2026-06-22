@@ -1168,6 +1168,30 @@ func (a *AppService) GetMappingCount() int {
 	return a.mappingService.Count()
 }
 
+// MappingEntry mirrors service.MappingEntry for the frontend.
+type MappingEntry struct {
+	NameEN  string   `json:"name_en"`
+	NameZH  string   `json:"name_zh"`
+	Aliases []string `json:"aliases"`
+}
+
+// GetMappingEntries returns a paginated, optionally filtered, view of the
+// name-mapping table. Used by the mapping-management UI in Settings.
+// query is a case-insensitive substring match against name_en, name_zh,
+// and aliases. offset/limit control pagination.
+func (a *AppService) GetMappingEntries(query string, offset, limit int) ([]MappingEntry, error) {
+	raw := a.mappingService.ListEntries(query, offset, limit)
+	out := make([]MappingEntry, 0, len(raw))
+	for _, r := range raw {
+		out = append(out, MappingEntry{
+			NameEN:  r.NameEN,
+			NameZH:  r.NameZH,
+			Aliases: r.Aliases,
+		})
+	}
+	return out, nil
+}
+
 // ===== Helper Methods =====
 
 // buildGameEntry creates a JSON-friendly map for a game with its latest trainer and state.
