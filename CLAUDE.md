@@ -99,10 +99,19 @@ go run tmp_e2e/main.go        # 真实抓取 1 页，打印入库结果
 
 `feat:` 新功能、`fix:` 修复、`chore:` 构建/配置、`docs:` 文档、`refactor:` 重构。最小原子提交。
 
-## 已知未完成项（按优先级）
+## 已完成项（v1.1 — 生产就绪）
 
-- 卡片视图切换（架构文档承诺，当前仅表格）
-- 多语言 i18n（README 宣传但未实现）
-- 映射表管理 UI（查看/编辑/导入，当前只读显示数量）
-- 下载安装的二次确认对话框
-- 全局错误 toast（当前部分页面仅 console.error）
+- ✅ **全量爬取修复**：`CountTotalPages` 真实探测（修正了 `post-standard` 误判 CSS 导致爬到 256 页的 bug），实测 49 页 / **731 个游戏 / 0 详情错误 / ~6 分钟**
+- ✅ **并发详情爬取 + 重试 + 断点续传**：bounded worker pool（默认 3）+ 429/5xx 指数退避 + `resume_from_page` 标记（应用中断后下次自动续传）
+- ✅ **取消能力**：`CancelRefresh` / `CancelDownload` 绑定，UI 显示进度条 + detail_errors 计数 + 取消按钮
+- ✅ **GetTrainerDetail 异步化**：`detail:progress` 事件 + `ErrDetailNotReady` 哨兵 + 手动重试按钮，不再卡 UI
+- ✅ **下载/安装/删除二次确认 + 全局错误 toast**：`useFeedback()` 组合式（confirm 返回 Promise<boolean>）
+- ✅ **zip 解压智能选择 launchable exe**：不再盲取 `extracted[0]`（之前可能选到 README 丢失真正修改器）
+- ✅ **i18n 多语言骨架**：vue-i18n 9，zh-CN（默认）+ en，设置页可切换并记忆
+- ✅ **映射表管理 UI**：`MappingBrowser` 模态（搜索 / 分页 / 别名标签）
+- ✅ **SQLite 驱动切换为 modernc.org/sqlite**（纯 Go，无 CGO，生产构建可直接 `PACKAGE_MANAGER=pnpm wails3 build`）
+
+## 已知未完成项
+
+- 跨页爬取中途断网的自动重试（单页内已重试，跨页需用户重新点击刷新；但 resume_from_page 标记保留了进度）
+- 映射表的「编辑 / 导入」功能（当前只读浏览 + 搜索；导入 name_mapping.json 仍需重新编译）
