@@ -15,7 +15,13 @@
     <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
         <security>
             <requestedPrivileges>
-                <requestedExecutionLevel level="asInvoker" uiAccess="false"/>
+                <!-- requireAdministrator: GameModMaster itself runs elevated
+                     so the trainer child processes it launches inherit
+                     admin rights WITHOUT each triggering their own UAC
+                     prompt. FLiNG trainers inject into the game process,
+                     which requires admin; running the launcher elevated is
+                     the cleanest way to avoid a UAC dialog on every launch. -->
+                <requestedExecutionLevel level="requireAdministrator" uiAccess="false"/>
             </requestedPrivileges>
         </security>
     </trustInfo>

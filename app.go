@@ -1009,16 +1009,19 @@ func (a *AppService) LaunchTrainer(trainerID int32) error {
 		return fmt.Errorf("trainer path is a directory, not a file: %s", exePath)
 	}
 
-	// Attempt 1: direct exec (no UAC). Works for trainers that don't need
-	// admin and is the least intrusive.
+	// Attempt 1: direct exec. Because the application manifest now requests
+	// requireAdministrator, GameModMaster itself runs elevated, so the trainer
+	// child process inherits admin rights automatically — NO UAC prompt here.
+	// This is the common path and what users see.
 	if err := launchDirect(exePath); err == nil {
 		a.markLaunched(trainerID)
 		return nil
 	}
 
-	// Attempt 2: UAC-elevated launch via the OS shell. On Windows this
-	// triggers the elevation prompt; the user already clicked 启动 so it's
-	// expected. On macOS/Linux this is the only path anyway.
+	// Attempt 2: UAC-elevated launch via the OS shell. Only reached if the
+	// app itself ISN'T elevated (e.g. the manifest was stripped, or the user
+	// launched via a debugger). On Windows this triggers the elevation
+	// prompt; on macOS/Linux this is the only path anyway.
 	if err := launchElevated(exePath); err != nil {
 		return fmt.Errorf("launch failed (tried direct + elevated): %w", err)
 	}
