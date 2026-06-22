@@ -1,20 +1,25 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import {
   NButton,
   NIcon,
   NSpin,
   NSpace,
   NInput,
-  useMessage,
+  NSelect,
 } from 'naive-ui'
 import { FolderOpenOutline, RefreshOutline } from '@vicons/ionicons5'
 import * as AppService from '../../bindings/GameModMaster/appservice'
 import { Events, Dialogs } from '@wailsio/runtime'
 import { useTrainerStore } from '../stores/trainer'
+import { useFeedback } from '../composables/useConfirm'
+import { useLocale, type AppLocale } from '../i18n'
+import { useI18n } from 'vue-i18n'
 
-const message = useMessage()
+const { t } = useI18n()
+const { toast } = useFeedback()
 const store = useTrainerStore()
+const { locale, setLocale } = useLocale()
 
 const loading = ref(false)
 const refreshing = ref(false)
@@ -24,6 +29,11 @@ const downloadDirInput = ref('')
 const editingDownloadDir = ref(false)
 const mappingCount = ref(0)
 const totalGames = ref(0)
+
+const localeOptions = computed(() => [
+  { label: t('settings.languageZh'), value: 'zh-CN' as AppLocale },
+  { label: t('settings.languageEn'), value: 'en' as AppLocale },
+])
 
 onMounted(() => {
   loadSettings()
@@ -46,9 +56,9 @@ async function loadSettings() {
     downloadDirInput.value = downloadDir.value
     mappingCount.value = mCount || 0
     totalGames.value = games || 0
-  } catch (e) {
+  } catch (e: any) {
     console.error('Failed to load settings:', e)
-    message.error('加载设置失败')
+    toast.error(`${e?.message || e}`)
   } finally {
     loading.value = false
   }
@@ -59,13 +69,17 @@ async function handleRefresh() {
   try {
     await store.refreshDataSync()
     await loadSettings()
-    message.success(store.refreshSummary || '刷新完成')
-  } catch (e) {
+    toast.success(store.refreshSummary || 'ok')
+  } catch (e: any) {
     console.error('Failed to refresh data:', e)
-    message.error('刷新失败')
+    toast.error(`${e?.message || e}`)
   } finally {
     refreshing.value = false
   }
+}
+
+function onChangeLocale(v: AppLocale) {
+  setLocale(v)
 }
 
 function startEditDownloadDir() {
@@ -77,7 +91,7 @@ function startEditDownloadDir() {
 async function browseDownloadDir() {
   try {
     const result = await Dialogs.OpenFile({
-      Title: '选择下载目录',
+      Title: t('settings.pickFolder'),
       CanChooseDirectories: true,
       CanChooseFiles: false,
       CanCreateDirectories: true,
@@ -88,9 +102,9 @@ async function browseDownloadDir() {
       const picked = Array.isArray(result) ? result[0] : result
       if (picked) downloadDirInput.value = picked
     }
-  } catch (e) {
+  } catch (e: any) {
     console.error('browse dir failed:', e)
-    message.error('打开文件夹选择器失败')
+    toast.error(`${e?.message || e}`)
   }
 }
 
@@ -102,17 +116,17 @@ function cancelEditDownloadDir() {
 async function saveDownloadDir() {
   const dir = downloadDirInput.value.trim()
   if (!dir) {
-    message.warning('下载路径不能为空')
+    toast.warning(t('settings.downloadDir'))
     return
   }
   try {
     await AppService.SetDownloadDir(dir)
     downloadDir.value = dir
     editingDownloadDir.value = false
-    message.success('下载路径已保存')
-  } catch (e) {
+    toast.success('ok')
+  } catch (e: any) {
     console.error('Failed to set download dir:', e)
-    message.error('保存失败：路径无效或不可写')
+    toast.error(`${e?.message || e}`)
   }
 }
 </script>
@@ -121,36 +135,55 @@ async function saveDownloadDir() {
   <div class="settings-view">
     <div class="page-head">
       <div class="page-head-left">
-        <h1 class="page-title">设置</h1>
+        <h1 class="page-title">{{ t('settings.title') }}</h1>
       </div>
       <NButton :loading="refreshing" secondary @click="handleRefresh">
         <template #icon>
           <NIcon><RefreshOutline /></NIcon>
         </template>
-        刷新数据
+        {{ t('home.refresh') }}
       </NButton>
     </div>
 
     <NSpin :show="loading">
-      <!-- Storage section -->
+      <!-- Preferences section: language -->
       <section class="card">
         <header class="card-head">
-          <h2 class="card-title">存储</h2>
-          <span class="card-desc">数据保存在系统用户目录，不会跟随程序被删除</span>
+          <h2 class="card-title">{{ t('settings.language') }}</h2>
         </header>
         <div class="kv-list">
           <div class="kv">
-            <div class="kv-label">数据目录</div>
+            <div class="kv-label">{{ t('settings.language') }}</div>
+            <div class="kv-value" style="max-width: 260px;">
+              <NSelect
+                :value="locale"
+                :options="localeOptions"
+                @update:value="onChangeLocale"
+                size="small"
+              />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Storage section -->
+      <section class="card">
+        <header class="card-head">
+          <h2 class="card-title">{{ t('settings.dataDir') }}</h2>
+        </header>
+        <div class="kv-list">
+          <div class="kv">
+            <div class="kv-label">{{ t('settings.dataDir') }}</div>
             <div class="kv-value mono">{{ dataDir || '-' }}</div>
           </div>
           <div class="kv">
-            <div class="kv-label">下载路径</div>
+            <div class="kv-label">{{ t('settings.downloadDir') }}</div>
             <div class="kv-value">
               <NSpace v-if="!editingDownloadDir" align="center" :wrap="false">
                 <span class="mono">{{ downloadDir || '-' }}</span>
                 <NButton size="tiny" quaternary @click="startEditDownloadDir">
                   <template #icon><NIcon><FolderOpenOutline /></NIcon></template>
-                  修改
+                  ✎
                 </NButton>
               </NSpace>
               <NSpace v-else align="center" :wrap="false">
@@ -158,14 +191,14 @@ async function saveDownloadDir() {
                   v-model:value="downloadDirInput"
                   size="small"
                   style="width: 380px;"
-                  placeholder="输入下载目录绝对路径"
+                  :placeholder="t('settings.downloadDir')"
                 />
                 <NButton size="small" @click="browseDownloadDir">
                   <template #icon><NIcon><FolderOpenOutline /></NIcon></template>
-                  浏览
+                  {{ t('settings.pickFolder') }}
                 </NButton>
-                <NButton size="small" type="primary" @click="saveDownloadDir">保存</NButton>
-                <NButton size="small" @click="cancelEditDownloadDir">取消</NButton>
+                <NButton size="small" type="primary" @click="saveDownloadDir">{{ t('common.confirm') }}</NButton>
+                <NButton size="small" @click="cancelEditDownloadDir">{{ t('common.cancel') }}</NButton>
               </NSpace>
             </div>
           </div>
@@ -175,16 +208,16 @@ async function saveDownloadDir() {
       <!-- Data section -->
       <section class="card">
         <header class="card-head">
-          <h2 class="card-title">数据统计</h2>
+          <h2 class="card-title">{{ t('settings.stats') }}</h2>
         </header>
         <div class="stat-grid">
           <div class="stat">
             <div class="stat-num">{{ totalGames }}</div>
-            <div class="stat-label">本地游戏数</div>
+            <div class="stat-label">{{ t('home.title') }}</div>
           </div>
           <div class="stat">
             <div class="stat-num">{{ mappingCount }}</div>
-            <div class="stat-label">名称映射条目</div>
+            <div class="stat-label">{{ t('settings.mappingCount') }}</div>
           </div>
         </div>
       </section>
@@ -192,26 +225,22 @@ async function saveDownloadDir() {
       <!-- About section -->
       <section class="card">
         <header class="card-head">
-          <h2 class="card-title">关于</h2>
+          <h2 class="card-title">{{ t('app.name') }}</h2>
         </header>
         <div class="kv-list">
           <div class="kv">
-            <div class="kv-label">应用名称</div>
+            <div class="kv-label">{{ t('app.name') }}</div>
             <div class="kv-value">GameModMaster</div>
           </div>
           <div class="kv">
-            <div class="kv-label">版本</div>
+            <div class="kv-label">v</div>
             <div class="kv-value">1.0.0</div>
           </div>
           <div class="kv">
-            <div class="kv-label">数据来源</div>
+            <div class="kv-label">{{ t('app.dataSource') }}</div>
             <div class="kv-value">
               <a href="https://flingtrainer.com" target="_blank" class="link">FLiNG Trainer ↗</a>
             </div>
-          </div>
-          <div class="kv">
-            <div class="kv-label">技术栈</div>
-            <div class="kv-value">Wails v3 · Go · Vue 3 · Naive UI</div>
           </div>
         </div>
       </section>

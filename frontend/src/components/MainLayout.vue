@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, h } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { NLayout, NLayoutSider, NMenu, NIcon } from 'naive-ui'
 import type { MenuOption } from 'naive-ui'
 import {
@@ -11,6 +12,7 @@ import {
 
 const route = useRoute()
 const router = useRouter()
+const { t } = useI18n()
 
 const activeKey = computed(() => {
   if (route.path.startsWith('/downloads')) return '/downloads'
@@ -26,23 +28,23 @@ function renderIcon(icon: any) {
   return () => h(NIcon, { size: 19 }, { default: () => h(icon) })
 }
 
-const menuOptions: MenuOption[] = [
+const menuOptions = computed<MenuOption[]>(() => [
   {
-    label: '游戏列表',
+    label: t('nav.home'),
     key: '/',
     icon: renderIcon(HomeOutline),
   },
   {
-    label: '我的修改器',
+    label: t('nav.downloads'),
     key: '/downloads',
     icon: renderIcon(DownloadOutline),
   },
   {
-    label: '设置',
+    label: t('nav.settings'),
     key: '/settings',
     icon: renderIcon(SettingsOutline),
   },
-]
+])
 </script>
 
 <template>
@@ -78,7 +80,7 @@ const menuOptions: MenuOption[] = [
       <!-- Footer -->
       <div class="sider-footer">
         <div class="footer-dot"></div>
-        <span>数据源：FLiNG Trainer</span>
+        <span>{{ t('app.dataSource') }}</span>
       </div>
     </NLayoutSider>
 

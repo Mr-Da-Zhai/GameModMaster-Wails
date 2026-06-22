@@ -1,0 +1,118 @@
+// Chinese (Simplified) — the project's default locale.
+// Keys are organised by feature area so additions stay scannable.
+export const zhCN = {
+  app: {
+    name: '游戏修改器大师',
+    dataSource: '数据源：FLiNG Trainer',
+  },
+  nav: {
+    home: '游戏列表',
+    downloads: '我的修改器',
+    settings: '设置',
+  },
+  home: {
+    title: '游戏库',
+    searchPlaceholder: '搜索游戏（中英文均可，联网搜索全部游戏）…',
+    countSuffix: '款',
+    refresh: '刷新数据',
+    cancelRefresh: '取消刷新（进度已保存）',
+    refreshStatus: '抓取中 {current}/{total} ({percent}%) · {games} 游戏',
+    refreshStatusWithErrors: '抓取中 {current}/{total} ({percent}%) · {games} 游戏 · {errors} 失败',
+    refreshCancelled: '已请求取消刷新（进度已保存）',
+    empty: '暂无游戏数据',
+    loadData: '立即加载',
+  },
+  detail: {
+    back: '返回',
+    loading: '正在从原站获取修改器版本…',
+    loadFailed: '详情加载失败',
+    retry: '重试',
+    notFound: '未找到游戏信息',
+    options: '选项',
+    updated: '更新',
+    viewSource: '查看原站 →',
+    versions: '修改器版本',
+    versionCount: '{count} 个版本',
+    columns: {
+      version: '修改器版本',
+      gameVersion: '游戏版本',
+      size: '大小',
+      downloads: '下载次数',
+      updatedAt: '更新时间',
+      status: '状态',
+      actions: '操作',
+    },
+    actions: {
+      download: '下载',
+      install: '安装',
+      launch: '启动',
+      cancel: '取消',
+    },
+    status: {
+      available: '可用',
+      downloaded: '已下载',
+      installed: '已安装',
+    },
+    confirm: {
+      download: {
+        title: '下载修改器',
+        content: '将下载到您设置的下载目录中，下载完成后会自动解压。是否继续？',
+        ok: '下载',
+      },
+      install: {
+        title: '标记为已安装',
+        content: '确认将此修改器标记为「已安装」？您之后可一键启动。',
+        ok: '确认',
+      },
+    },
+    toast: {
+      downloadDone: '下载完成',
+      downloadCancelled: '已取消下载',
+      downloadFailed: '下载失败：{msg}',
+      installDone: '已标记为已安装',
+      installFailed: '安装失败：{msg}',
+      launchDone: '已启动',
+      launchFailed: '启动失败：{msg}',
+      loadFailed: '详情加载失败：{msg}',
+      retryFailed: '重试失败：{msg}',
+    },
+  },
+  downloads: {
+    title: '我的修改器',
+    countSuffix: '个',
+    empty: '还没有下载任何修改器',
+    actions: {
+      launch: '启动',
+      delete: '删除',
+    },
+    confirm: {
+      delete: {
+        title: '删除修改器',
+        content: '将删除「{name}」的本地文件与状态。此操作不可恢复，是否继续？',
+        ok: '删除',
+      },
+    },
+    toast: {
+      launchDone: '已启动：{name}',
+      launchFailed: '启动失败：{msg}',
+      deleteDone: '已删除',
+      deleteFailed: '删除失败：{msg}',
+      loadFailed: '加载列表失败：{msg}',
+    },
+  },
+  settings: {
+    title: '设置',
+    language: '界面语言',
+    languageZh: '简体中文',
+    languageEn: 'English',
+    dataDir: '数据目录',
+    downloadDir: '下载目录',
+    pickFolder: '选择文件夹',
+    mappingCount: '名称映射条目',
+    stats: '统计信息',
+  },
+  common: {
+    cancel: '取消',
+    confirm: '确认',
+  },
+}
