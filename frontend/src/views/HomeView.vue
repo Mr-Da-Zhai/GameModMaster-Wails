@@ -15,9 +15,6 @@ import {
   RefreshOutline,
   CloudDownloadOutline,
   SearchOutline,
-  DownloadOutline,
-  PlayOutline,
-  CheckmarkCircle,
   CloseCircleOutline,
 } from '@vicons/ionicons5'
 import { useI18n } from 'vue-i18n'
@@ -170,21 +167,6 @@ const refreshPercent = computed(() => {
 const isEmpty = computed(
   () => !store.loading && !store.refreshing && store.trainers.length === 0
 )
-
-function onCardAction(e: Event, row: GameEntry) {
-  e.stopPropagation()
-  const t = row.latest_trainer
-  if (!t) return
-  if (row.status === 2) store.launchTrainer(t.id)
-  else if (row.status === 1) store.installTrainer(t.id)
-  else store.downloadTrainer(t.id)
-}
-
-function actionLabel(status: number) {
-  if (status === 2) return '启动'
-  if (status === 1) return '安装'
-  return '下载'
-}
 </script>
 
 <template>
@@ -293,22 +275,13 @@ function actionLabel(status: number) {
                 <span>{{ (g.display_name || g.name_en || '?').slice(0, 2) }}</span>
               </div>
 
-              <!-- status badge -->
-              <span v-if="statusBadge(g.status)" :class="['status-badge', statusBadge(g.status)!.cls]">
-                {{ statusBadge(g.status)!.text }}
-              </span>
-
-              <!-- hover action overlay -->
-              <div class="overlay">
-                <button class="action-btn" @click="onCardAction($event, g)">
-                  <NIcon size="16">
-                    <PlayOutline v-if="g.status === 2" />
-                    <CheckmarkCircle v-else-if="g.status === 1" />
-                    <DownloadOutline v-else />
-                  </NIcon>
-                  <span>{{ actionLabel(g.status) }}</span>
-                </button>
-              </div>
+              <!-- status dot (top-right): a small colored circle beats a
+                   chunky pill badge for the Apple-minimalist look. -->
+              <span
+                v-if="statusBadge(g.status)"
+                :class="['status-dot', statusBadge(g.status)!.cls]"
+                :title="statusBadge(g.status)!.text"
+              ></span>
             </div>
 
             <div class="info">
@@ -317,6 +290,7 @@ function actionLabel(status: number) {
               </div>
               <div class="meta">
                 <span v-if="g.options_num">{{ g.options_num }} 项</span>
+                <span v-if="g.options_num && g.latest_trainer?.game_version" class="meta-dot">·</span>
                 <span v-if="g.latest_trainer?.game_version" class="ver">{{ g.latest_trainer.game_version }}</span>
               </div>
             </div>
@@ -475,18 +449,18 @@ export default { name: 'HomeView' }
   padding-bottom: 8px;
 }
 
+/* Frameless cover-led card: no background, no border. The cover image IS
+   the card; the title/meta sit below it in plain text. Hover scales the
+   cover slightly (Apple-Music-album-grid feel) instead of overlaying
+   action buttons — the whole card is clickable to open detail. */
 .card {
   cursor: pointer;
-  border-radius: 12px;
-  overflow: hidden;
-  background: var(--surface-1);
-  border: 1px solid var(--border-soft);
-  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+  background: transparent;
+  border: none;
+  transition: transform 0.2s ease;
 }
 .card:hover {
-  transform: translateY(-3px);
-  border-color: var(--accent);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
+  transform: translateY(-2px);
 }
 
 .cover {
@@ -495,12 +469,22 @@ export default { name: 'HomeView' }
   aspect-ratio: 3 / 4;
   background: var(--surface-2);
   overflow: hidden;
+  border-radius: 16px;
+  transition: box-shadow 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+.card:hover .cover {
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
 }
 .cover img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+  transition: transform 0.3s ease;
+}
+.card:hover .cover img {
+  transform: scale(1.04);
 }
 .cover-fallback {
   width: 100%;
@@ -509,69 +493,37 @@ export default { name: 'HomeView' }
   align-items: center;
   justify-content: center;
   font-size: 28px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-3);
-  background: linear-gradient(135deg, var(--surface-2), #1a2740);
+  background: linear-gradient(135deg, var(--surface-2), var(--surface-3));
 }
 
-.status-badge {
+/* Status dot: tiny colored circle top-right of the cover. Far less
+   visually heavy than the old pill badge, but still scan-able. */
+.status-dot {
   position: absolute;
-  top: 8px;
-  left: 8px;
-  padding: 3px 9px;
-  border-radius: 20px;
-  font-size: 11px;
-  font-weight: 600;
-  backdrop-filter: blur(6px);
+  top: 10px;
+  right: 10px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px rgba(8, 8, 10, 0.6), 0 0 8px currentColor;
 }
 .badge-downloaded {
-  background: rgba(56, 189, 248, 0.85);
-  color: #0c2433;
+  background: #38bdf8;
+  color: #38bdf8;
 }
 .badge-installed {
-  background: rgba(52, 211, 153, 0.9);
-  color: #052e1e;
-}
-
-.overlay {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(0deg, rgba(15, 23, 42, 0.92) 0%, rgba(15, 23, 42, 0.3) 50%, transparent 100%);
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  padding-bottom: 14px;
-  opacity: 0;
-  transition: opacity 0.18s ease;
-}
-.card:hover .overlay {
-  opacity: 1;
-}
-.action-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 16px;
-  border: none;
-  border-radius: 20px;
-  background: var(--accent);
-  color: #04201c;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s ease, transform 0.15s ease;
-}
-.action-btn:hover {
-  background: #5eead4;
-  transform: scale(1.05);
+  background: #34d399;
+  color: #34d399;
 }
 
 .info {
-  padding: 10px 12px 12px;
+  padding: 12px 4px 4px;
 }
 .name {
   font-size: 13.5px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text-1);
   line-height: 1.35;
   overflow: hidden;
@@ -580,15 +532,20 @@ export default { name: 'HomeView' }
 }
 .meta {
   display: flex;
-  gap: 8px;
+  gap: 6px;
+  align-items: center;
   margin-top: 4px;
   font-size: 11.5px;
   color: var(--text-3);
+}
+.meta-dot {
+  opacity: 0.6;
 }
 .ver {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
 }
 
 .empty {

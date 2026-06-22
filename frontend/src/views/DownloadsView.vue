@@ -173,16 +173,12 @@ export default { name: 'DownloadsView' }
 
 .card {
   cursor: pointer;
-  border-radius: 12px;
-  overflow: hidden;
-  background: var(--surface-1);
-  border: 1px solid var(--border-soft);
-  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+  background: transparent;
+  border: none;
+  transition: transform 0.2s ease;
 }
 .card:hover {
-  transform: translateY(-3px);
-  border-color: var(--accent);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
+  transform: translateY(-2px);
 }
 .cover {
   position: relative;
@@ -190,12 +186,22 @@ export default { name: 'DownloadsView' }
   aspect-ratio: 3 / 4;
   background: var(--surface-2);
   overflow: hidden;
+  border-radius: 16px;
+  transition: box-shadow 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+.card:hover .cover {
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
 }
 .cover img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+  transition: transform 0.3s ease;
+}
+.card:hover .cover img {
+  transform: scale(1.04);
 }
 .cover-fallback {
   width: 100%;
@@ -204,31 +210,34 @@ export default { name: 'DownloadsView' }
   align-items: center;
   justify-content: center;
   font-size: 28px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-3);
-  background: linear-gradient(135deg, var(--surface-2), #1a2740);
+  background: linear-gradient(135deg, var(--surface-2), var(--surface-3));
 }
+/* Status dot top-right — same minimal treatment as HomeView cards. */
 .status-badge {
   position: absolute;
-  top: 8px;
-  left: 8px;
-  padding: 3px 9px;
-  border-radius: 20px;
-  font-size: 11px;
-  font-weight: 600;
+  top: 10px;
+  right: 10px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  padding: 0;
+  font-size: 0;
+  box-shadow: 0 0 0 2px rgba(8, 8, 10, 0.6), 0 0 8px currentColor;
 }
 .badge-downloaded {
-  background: rgba(56, 189, 248, 0.85);
-  color: #0c2433;
+  background: #38bdf8;
+  color: #38bdf8;
 }
 .badge-installed {
-  background: rgba(52, 211, 153, 0.9);
-  color: #052e1e;
+  background: #34d399;
+  color: #34d399;
 }
 .overlay {
   position: absolute;
   inset: 0;
-  background: linear-gradient(0deg, rgba(15, 23, 42, 0.92) 0%, rgba(15, 23, 42, 0.3) 50%, transparent 100%);
+  background: linear-gradient(0deg, rgba(8, 8, 10, 0.92) 0%, rgba(8, 8, 10, 0.3) 50%, transparent 100%);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -237,6 +246,7 @@ export default { name: 'DownloadsView' }
   padding-bottom: 16px;
   opacity: 0;
   transition: opacity 0.18s ease;
+  border-radius: 16px;
 }
 .card:hover .overlay {
   opacity: 1;

@@ -372,36 +372,35 @@ const rowKey = (row: TrainerDetail) => row.id
       </div>
 
       <template v-if="game">
-        <!-- Game info -->
+        <!-- Game info hero: Apple-style. Big cover on the left, generous
+             whitespace, a Light-weight hero title, and a quiet meta row
+             separated by middle dots. No boxed card — just space + type. -->
         <div class="game-info-card">
           <div class="game-cover">
             <NImage
               v-if="game.cover_url"
               :src="game.cover_url"
-              width="96"
-              height="96"
+              width="128"
+              height="128"
               object-fit="cover"
               :preview-src="''"
               :show-toolbar="false"
-              fallback-src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='96' height='96'><rect fill='%23334155' width='96' height='96' rx='14'/></svg>"
+              fallback-src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='128' height='128'><rect fill='%231f1f23' width='128' height='128' rx='20'/></svg>"
               class="cover-img"
             />
             <div v-else class="cover-placeholder">
-              <NIcon size="32" color="#64748b"><GameControllerOutline /></NIcon>
+              <NIcon size="40" color="#64748b"><GameControllerOutline /></NIcon>
             </div>
           </div>
           <div class="game-meta">
             <h1 class="game-title">{{ game.display_name || game.name_en }}</h1>
             <div class="game-sub" v-if="game.name_local && game.name_local !== game.display_name">{{ game.name_en }}</div>
             <div class="meta-row">
-              <span v-if="latestGameVersion" class="meta-item">
-                <span class="meta-label">游戏版本</span>
-                <span class="meta-val">{{ latestGameVersion }}</span>
-              </span>
+              <span v-if="latestGameVersion" class="meta-val">{{ latestGameVersion }}</span>
               <span v-if="latestGameVersion" class="meta-dot">·</span>
-              <span class="meta-item"><span class="meta-label">选项</span><span class="meta-val">{{ game.options_num || '-' }}</span></span>
+              <span class="meta-val">{{ game.options_num || 0 }} 项</span>
               <span class="meta-dot">·</span>
-              <span class="meta-item"><span class="meta-label">更新</span><span class="meta-val">{{ formatDate(game.updated_at) }}</span></span>
+              <span class="meta-val">{{ formatDate(game.updated_at) }}</span>
               <a v-if="game.source_url" :href="game.source_url" target="_blank" class="source-link">查看原站 →</a>
             </div>
           </div>
@@ -466,25 +465,25 @@ export default { name: 'DetailView' }
   padding: 24px;
 }
 
+/* Hero game-info: no boxed card — just space + type (Apple-style). The
+   cover sits left, the title is a large Light-weight hero, and the meta
+   row uses middle dots instead of label/value pairs. */
 .game-info-card {
   display: flex;
-  gap: 20px;
-  align-items: flex-start;
-  padding: 24px;
-  background: var(--surface-1);
-  border: 1px solid var(--border-soft);
-  border-radius: 14px;
+  gap: 24px;
+  align-items: center;
+  padding: 8px 4px 28px;
 }
 .game-cover {
   flex-shrink: 0;
 }
 .cover-img {
-  border-radius: 14px !important;
+  border-radius: 20px !important;
 }
 .cover-placeholder {
-  width: 96px;
-  height: 96px;
-  border-radius: 14px;
+  width: 128px;
+  height: 128px;
+  border-radius: 20px;
   background: var(--surface-2);
   display: flex;
   align-items: center;
@@ -495,49 +494,44 @@ export default { name: 'DetailView' }
   min-width: 0;
 }
 .game-title {
-  font-size: 24px;
-  font-weight: 700;
+  font-size: 32px;
+  font-weight: 300; /* Light — Apple hero */
   color: var(--text-1);
   margin: 0;
-  letter-spacing: 0.2px;
+  letter-spacing: -0.4px;
+  line-height: 1.15;
 }
 .game-sub {
   font-size: 13px;
   color: var(--text-3);
-  margin-top: 4px;
+  margin-top: 6px;
+  font-weight: 400;
 }
 .meta-row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-top: 16px;
+  gap: 10px;
+  margin-top: 18px;
   flex-wrap: wrap;
 }
-.meta-item {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-}
-.meta-label {
-  font-size: 12px;
-  color: var(--text-3);
-}
 .meta-val {
-  font-size: 14px;
-  color: var(--text-1);
-  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-2);
+  font-weight: 400;
 }
 .meta-dot {
   color: var(--text-3);
+  opacity: 0.6;
 }
 .source-link {
   margin-left: auto;
   font-size: 13px;
   color: var(--accent);
   text-decoration: none;
+  font-weight: 500;
 }
 .source-link:hover {
-  text-decoration: underline;
+  color: var(--accent-hover);
 }
 
 .versions-card {

@@ -1,178 +1,167 @@
 <script setup lang="ts">
-import { computed, h } from 'vue'
+import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { NLayout, NLayoutSider, NMenu, NIcon } from 'naive-ui'
-import type { MenuOption } from 'naive-ui'
-import {
-  HomeOutline,
-  DownloadOutline,
-  SettingsOutline,
-} from '@vicons/ionicons5'
 
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
 
+// The top-bar tabs. The detail route collapses onto the Home tab (you reach
+// detail from a card click inside the library, so "Library" stays active).
+type Tab = { key: string; label: string }
+
+const tabs = computed<Tab[]>(() => [
+  { key: '/', label: t('nav.home') },
+  { key: '/downloads', label: t('nav.downloads') },
+  { key: '/settings', label: t('nav.settings') },
+])
+
 const activeKey = computed(() => {
   if (route.path.startsWith('/downloads')) return '/downloads'
   if (route.path.startsWith('/settings')) return '/settings'
-  return '/'
+  return '/' // home + detail both highlight Library
 })
 
-function handleMenuUpdate(key: string) {
-  router.push(key)
+function go(key: string) {
+  if (key !== route.path) router.push(key)
 }
-
-function renderIcon(icon: any) {
-  return () => h(NIcon, { size: 19 }, { default: () => h(icon) })
-}
-
-const menuOptions = computed<MenuOption[]>(() => [
-  {
-    label: t('nav.home'),
-    key: '/',
-    icon: renderIcon(HomeOutline),
-  },
-  {
-    label: t('nav.downloads'),
-    key: '/downloads',
-    icon: renderIcon(DownloadOutline),
-  },
-  {
-    label: t('nav.settings'),
-    key: '/settings',
-    icon: renderIcon(SettingsOutline),
-  },
-])
 </script>
 
 <template>
-  <NLayout has-sider class="app-shell">
-    <NLayoutSider
-      bordered
-      :width="208"
-      :native-scrollbar="false"
-      content-style="display:flex; flex-direction:column; height:100%;"
-      class="app-sider"
-    >
-      <!-- Brand -->
-      <div class="brand">
+  <div class="app-shell">
+    <!-- Top bar: brand on the left, pill tabs on the right. Frosted-glass
+         effect via backdrop-filter so content scrolling under it stays
+         legible without a hard divider line. -->
+    <header class="topbar">
+      <div class="brand" @click="go('/')">
         <div class="brand-logo">
           <span class="brand-emoji">🎮</span>
         </div>
         <div class="brand-text">
           <div class="brand-name">ModMaster</div>
-          <div class="brand-sub">游戏修改器大师</div>
         </div>
       </div>
 
-      <!-- Nav -->
-      <div class="nav-wrap">
-        <NMenu
-          :value="activeKey"
-          :options="menuOptions"
-          :inverted="true"
-          @update:value="handleMenuUpdate"
-        />
-      </div>
+      <nav class="tabs">
+        <button
+          v-for="tab in tabs"
+          :key="tab.key"
+          :class="['tab', { active: activeKey === tab.key }]"
+          @click="go(tab.key)"
+        >
+          {{ tab.label }}
+        </button>
+      </nav>
+    </header>
 
-      <!-- Footer -->
-      <div class="sider-footer">
-        <div class="footer-dot"></div>
-        <span>{{ t('app.dataSource') }}</span>
-      </div>
-    </NLayoutSider>
-
-    <NLayout class="app-main" :native-scrollbar="false">
+    <!-- Content area: full-width, scrollable. The 24px horizontal padding
+         gives the content room to breathe (Apple-style generous margins). -->
+    <main class="app-main">
       <div class="main-inner">
         <router-view />
       </div>
-    </NLayout>
-  </NLayout>
+    </main>
+  </div>
 </template>
 
 <style scoped>
 .app-shell {
   height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
-.app-sider {
-  background: linear-gradient(180deg, #131c2e 0%, #0f1729 100%) !important;
-  border-right: 1px solid var(--border) !important;
+/* Frosted-glass top bar. backdrop-filter blurs whatever scrolls underneath;
+   the semi-transparent dark bg keeps contrast. A single hairline border at
+   the bottom replaces the old sider's heavy right border. */
+.topbar {
+  height: 56px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  background: rgba(10, 10, 12, 0.72);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-bottom: 1px solid var(--border-soft);
+  position: relative;
+  z-index: 10;
 }
 
-/* Brand area */
 .brand {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 22px 18px 20px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
 }
 .brand-logo {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, var(--accent) 0%, #0ea5e9 100%);
-  box-shadow: 0 6px 18px var(--accent-glow);
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
+  box-shadow: 0 4px 14px var(--accent-glow);
   flex-shrink: 0;
 }
 .brand-emoji {
-  font-size: 20px;
-}
-.brand-text {
-  min-width: 0;
+  font-size: 16px;
 }
 .brand-name {
-  font-size: 16px;
-  font-weight: 700;
+  font-size: 15px;
+  font-weight: 600;
   color: var(--text-1);
-  letter-spacing: 0.3px;
-  line-height: 1.2;
-}
-.brand-sub {
-  font-size: 11px;
-  color: var(--text-3);
-  margin-top: 2px;
+  letter-spacing: 0.2px;
 }
 
-.nav-wrap {
-  flex: 1;
-  padding: 14px 12px;
-  overflow-y: auto;
-}
-
-.sider-footer {
-  padding: 14px 18px 18px;
-  border-top: 1px solid rgba(148, 163, 184, 0.08);
+/* Pill tabs: inactive = ghost text; active = soft accent-tinted background.
+   The whole group sits in its own rounded container so the active state
+   reads as a segmented control rather than three loose buttons. */
+.tabs {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 11px;
-  color: var(--text-3);
+  gap: 2px;
+  padding: 4px;
+  background: var(--surface-1);
+  border-radius: 999px;
 }
-.footer-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 8px var(--accent);
-  flex-shrink: 0;
+.tab {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--text-3);
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  padding: 7px 18px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.tab:hover {
+  color: var(--text-1);
+}
+.tab.active {
+  background: var(--accent-glow);
+  color: var(--accent);
 }
 
 .app-main {
-  background: transparent !important;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: transparent;
 }
-
 .main-inner {
   height: 100%;
   min-height: 0;
   padding: 24px 28px;
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
 }
 </style>
